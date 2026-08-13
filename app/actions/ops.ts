@@ -177,6 +177,74 @@ export async function generateRecurringForMonth(formData: FormData) {
   revalidateFinance();
 }
 
+export async function deleteRecurringExpense(formData: FormData) {
+  const ctx = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  await prisma.recurringExpense.deleteMany({ where: { id, tenantId: ctx.tenantId } });
+  revalidatePath("/expenses");
+}
+
+export async function setContactActive(formData: FormData) {
+  const ctx = await requireBrokerOps();
+  const kind = str(formData, "kind");
+  const contactId = str(formData, "contactId");
+  const active = str(formData, "isActive") !== "false";
+  if (!kind || !contactId) return;
+  if (kind === "buyer") {
+    await prisma.buyer.updateMany({
+      where: { id: contactId, tenantId: ctx.tenantId },
+      data: { isActive: active },
+    });
+  } else if (kind === "publisher") {
+    await prisma.publisher.updateMany({
+      where: { id: contactId, tenantId: ctx.tenantId },
+      data: { isActive: active },
+    });
+  }
+  revalidatePath("/directory");
+  revalidatePath("/buyers");
+  revalidatePath("/publishers");
+}
+
+export async function removeContact(formData: FormData) {
+  const ctx = await requireBrokerOps();
+  const kind = str(formData, "kind");
+  const contactId = str(formData, "contactId");
+  if (!kind || !contactId) return;
+
+  if (kind === "buyer") {
+    const invoices = await prisma.buyerInvoice.count({ where: { buyerId: contactId, tenantId: ctx.tenantId } });
+    if (invoices > 0) {
+      await prisma.buyer.updateMany({
+        where: { id: contactId, tenantId: ctx.tenantId },
+        data: { isActive: false },
+      });
+    } else {
+      await prisma.invite.deleteMany({ where: { buyerId: contactId, tenantId: ctx.tenantId, usedAt: null } });
+      await prisma.buyer.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } });
+    }
+  } else if (kind === "publisher") {
+    const invoices = await prisma.publisherInvoice.count({
+      where: { publisherId: contactId, tenantId: ctx.tenantId },
+    });
+    if (invoices > 0) {
+      await prisma.publisher.updateMany({
+        where: { id: contactId, tenantId: ctx.tenantId },
+        data: { isActive: false },
+      });
+    } else {
+      await prisma.invite.deleteMany({
+        where: { publisherId: contactId, tenantId: ctx.tenantId, usedAt: null },
+      });
+      await prisma.publisher.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } });
+    }
+  }
+  revalidatePath("/directory");
+  revalidatePath("/buyers");
+  revalidatePath("/publishers");
+}
+
 export async function upsertPartner(formData: FormData) {
   const ctx = await requireTenantAdmin();
   const name = parsePersonName(formField(formData, "name"), "Name");
@@ -459,11 +527,12 @@ export async function inviteContact(
   let publisherId: string | null = null;
 
   if (kind === "buyer") {
-    const buyers = await prisma.$queryRaw<{ id: string; email: string | null }[]>`
-      SELECT id, email FROM "Buyer" WHERE id = ${contactId} AND "tenantId" = ${ctx.tenantId} LIMIT 1
+    const buyers = await prisma.$queryRaw<{ id: string; email: string | null; isActive: boolean }[]>`
+      SELECT id, email, "isActive" FROM "Buyer" WHERE id = ${contactId} AND "tenantId" = ${ctx.tenantId} LIMIT 1
     `;
     const buyer = buyers[0];
     if (!buyer) return { error: "Buyer not found." };
+    if (!buyer.isActive) return { error: "Reactivate this buyer before inviting." };
     const email = parseEmail(formField(formData, "email") || buyer.email || "", true);
     if (!email.ok || !email.value) return { error: email.ok ? "Add an email on this buyer before inviting." : email.error };
     emailValue = email.value;
@@ -478,12 +547,21 @@ export async function inviteContact(
         UPDATE "Buyer" SET email = ${emailValue} WHERE id = ${buyer.id} AND "tenantId" = ${ctx.tenantId}
       `;
     }
+    await prisma.$executeRaw`
+      UPDATE "Invite"
+      SET "expiresAt" = NOW()
+      WHERE "tenantId" = ${ctx.tenantId}
+        AND "buyerId" = ${buyer.id}
+        AND "usedAt" IS NULL
+        AND "expiresAt" > NOW()
+    `;
   } else if (kind === "publisher") {
-    const publishers = await prisma.$queryRaw<{ id: string; email: string | null }[]>`
-      SELECT id, email FROM "Publisher" WHERE id = ${contactId} AND "tenantId" = ${ctx.tenantId} LIMIT 1
+    const publishers = await prisma.$queryRaw<{ id: string; email: string | null; isActive: boolean }[]>`
+      SELECT id, email, "isActive" FROM "Publisher" WHERE id = ${contactId} AND "tenantId" = ${ctx.tenantId} LIMIT 1
     `;
     const publisher = publishers[0];
     if (!publisher) return { error: "Publisher not found." };
+    if (!publisher.isActive) return { error: "Reactivate this publisher before inviting." };
     const email = parseEmail(formField(formData, "email") || publisher.email || "", true);
     if (!email.ok || !email.value) return { error: email.ok ? "Add an email on this publisher before inviting." : email.error };
     emailValue = email.value;
@@ -498,6 +576,14 @@ export async function inviteContact(
         UPDATE "Publisher" SET email = ${emailValue} WHERE id = ${publisher.id} AND "tenantId" = ${ctx.tenantId}
       `;
     }
+    await prisma.$executeRaw`
+      UPDATE "Invite"
+      SET "expiresAt" = NOW()
+      WHERE "tenantId" = ${ctx.tenantId}
+        AND "publisherId" = ${publisher.id}
+        AND "usedAt" IS NULL
+        AND "expiresAt" > NOW()
+    `;
   } else {
     return { error: "Only buyers and publishers can be invited from Contacts." };
   }

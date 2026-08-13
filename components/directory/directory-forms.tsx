@@ -5,7 +5,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { inviteContact, upsertDirectory } from "@/app/actions/ops";
+import { inviteContact, removeContact, setContactActive, upsertDirectory } from "@/app/actions/ops";
 import { NativeSelect, TextInput } from "@/components/forms";
 
 type ContactKind = "buyer" | "publisher" | "vertical";
@@ -96,14 +96,12 @@ export function ContactInviteButton({
   kind,
   contactId,
   email,
-  disabled,
-  statusLabel,
+  resend,
 }: {
   kind: "buyer" | "publisher";
   contactId: string;
   email?: string | null;
-  disabled?: boolean;
-  statusLabel?: string;
+  resend?: boolean;
 }) {
   const [state, action] = useActionState(inviteContact, {} as {
     error?: string;
@@ -111,14 +109,6 @@ export function ContactInviteButton({
     emailed?: boolean;
     inviteUrl?: string;
   });
-
-  if (disabled) {
-    return (
-      <Typography variant="caption" color="text.secondary">
-        {statusLabel ?? "Portal access active"}
-      </Typography>
-    );
-  }
 
   return (
     <Box component="form" action={action} sx={{ display: "grid", gap: 0.75, minWidth: 200 }}>
@@ -134,7 +124,7 @@ export function ContactInviteButton({
         maxLength={254}
       />
       <Button type="submit" size="small" variant="outlined" color="secondary">
-        Send invite
+        {resend ? "Resend invite" : "Send invite"}
       </Button>
       {state.ok && state.emailed ? (
         <Typography variant="caption" color="success.main">
@@ -152,5 +142,39 @@ export function ContactInviteButton({
         </Typography>
       ) : null}
     </Box>
+  );
+}
+
+export function ContactLifecycleActions({
+  kind,
+  contactId,
+  isActive,
+  hasInvoices,
+}: {
+  kind: "buyer" | "publisher";
+  contactId: string;
+  isActive: boolean;
+  hasInvoices: boolean;
+}) {
+  return (
+    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+      <Box component="form" action={setContactActive}>
+        <input type="hidden" name="kind" value={kind} />
+        <input type="hidden" name="contactId" value={contactId} />
+        <input type="hidden" name="isActive" value={isActive ? "false" : "true"} />
+        <Button type="submit" size="small" variant="outlined">
+          {isActive ? "Deactivate" : "Reactivate"}
+        </Button>
+      </Box>
+      {!hasInvoices ? (
+        <Box component="form" action={removeContact}>
+          <input type="hidden" name="kind" value={kind} />
+          <input type="hidden" name="contactId" value={contactId} />
+          <Button type="submit" size="small" color="error" variant="text">
+            Remove
+          </Button>
+        </Box>
+      ) : null}
+    </Stack>
   );
 }

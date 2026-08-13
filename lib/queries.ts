@@ -139,8 +139,8 @@ export async function getDashboardAttention(tenantId: string) {
 
 export async function getDirectoryOptions(tenantId: string) {
   const [buyers, publishers, verticals] = await Promise.all([
-    prisma.buyer.findMany({ where: { tenantId }, orderBy: { name: "asc" } }),
-    prisma.publisher.findMany({ where: { tenantId }, orderBy: { name: "asc" } }),
+    prisma.buyer.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }),
+    prisma.publisher.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }),
     prisma.vertical.findMany({ where: { tenantId }, orderBy: { name: "asc" } }),
   ]);
   return { buyers, publishers, verticals };

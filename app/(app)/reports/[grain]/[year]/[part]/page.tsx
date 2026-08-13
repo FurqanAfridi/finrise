@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Grid from "@mui/material/Grid";
@@ -11,90 +12,103 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { MainCard } from "@/components/berry/main-card";
-import { EmptyState } from "@/components/shared/empty-state";
-import { KpiCard } from "@/components/shared/kpi-card";
 import { NativeSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
-import { computeTenantMonth, listMonthKeys, loadMonthlyLines } from "@/lib/finance/queries";
-import { previousMonth } from "@/lib/finance/period";
+import { EmptyState } from "@/components/shared/empty-state";
+import { KpiCard } from "@/components/shared/kpi-card";
+import { boundsForGrain, type ReportGrain } from "@/lib/finance/period";
+import { computeTenantPeriod, getFinanceSettings, loadPeriodLines } from "@/lib/finance/queries";
 import { formatMoney } from "@/lib/money";
 import { requireBrokerOps } from "@/lib/tenant";
 import { monthName } from "@/lib/utils";
 import { gridSpacing } from "@/theme/berry";
 
-export default async function MonthlyOverviewPage({
+const GRAINS: ReportGrain[] = ["week", "month", "quarter", "year"];
+
+export default async function PeriodReportPage({
   params,
 }: {
-  params: Promise<{ year: string; month: string }>;
+  params: Promise<{ grain: string; year: string; part: string }>;
 }) {
   const ctx = await requireBrokerOps();
-  const { year: yearRaw, month: monthRaw } = await params;
-  const year = Number(yearRaw);
-  const month = Number(monthRaw);
-  const prev = previousMonth(year, month);
+  const { grain: grainRaw, year: yearRaw, part: partRaw } = await params;
+  const grain = grainRaw as ReportGrain;
+  if (!GRAINS.includes(grain)) notFound();
 
-  const [current, previous, lines, keys] = await Promise.all([
-    computeTenantMonth(ctx.tenantId, year, month),
-    computeTenantMonth(ctx.tenantId, prev.year, prev.month),
-    loadMonthlyLines(ctx.tenantId, year, month),
-    listMonthKeys(ctx.tenantId),
+  const year = Number(yearRaw);
+  const part = Number(partRaw);
+  if (!Number.isFinite(year) || !Number.isFinite(part) || part < 1) notFound();
+
+  const settings = await getFinanceSettings(ctx.tenantId);
+  const bounds = boundsForGrain(grain, year, part, settings.fiscalMonthStartDay);
+  const [current, lines] = await Promise.all([
+    computeTenantPeriod(ctx.tenantId, bounds.start, bounds.end),
+    loadPeriodLines(ctx.tenantId, bounds.start, bounds.end),
   ]);
 
   const { overview, distribution } = current;
-  const years = [...new Set(keys.map((row) => row.year))];
-  if (!years.includes(year)) years.push(year);
-  const mom = overview.profit.sub(previous.overview.profit).toNumber();
   const hasLines = lines.buyers.length + lines.publishers.length + lines.expenses.length > 0;
+  const years = Array.from({ length: 6 }, (_, i) => new Date().getUTCFullYear() - i);
+  const partMax = grain === "week" ? 53 : grain === "month" ? 12 : grain === "quarter" ? 4 : 1;
 
   return (
     <Box>
       <PageHeader
-        title={`${monthName(month)} ${year}`}
-        description="How this month looks so far — cash in, cash out, and what’s left."
+        title={bounds.label}
+        description={`${grainLabel(grain)} report — cash in, cash out, and what’s left.`}
       >
         <Link href="/reports">
           <Button variant="outlined" color="primary">
             All reports
           </Button>
         </Link>
-        <Link href={`/reports/monthly/${year}/${month}/csv`}>
-          <Button variant="outlined" color="primary">
-            Download CSV
-          </Button>
-        </Link>
-        <Link href={`/reports/monthly/${year}/${month}/print`}>
-          <Button variant="outlined" color="primary">
-            Print
-          </Button>
-        </Link>
+        {grain === "month" ? (
+          <Link href={`/reports/monthly/${year}/${part}`}>
+            <Button variant="outlined" color="primary">
+              Classic monthly view
+            </Button>
+          </Link>
+        ) : null}
       </PageHeader>
 
       <MainCard sx={{ mb: 3 }} contentSX={{ py: 2 }}>
         <Box
           component="form"
-          action="/reports/monthly/go"
+          action="/reports/go"
           sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-end" }}
         >
           <Box sx={{ minWidth: 140, flex: "1 1 140px" }}>
+            <NativeSelect label="Report type" name="grain" defaultValue={grain}>
+              <option value="week">Weekly</option>
+              <option value="month">Monthly</option>
+              <option value="quarter">Quarterly</option>
+              <option value="year">Yearly</option>
+            </NativeSelect>
+          </Box>
+          <Box sx={{ minWidth: 120, flex: "1 1 120px" }}>
             <NativeSelect label="Year" name="year" defaultValue={String(year)}>
-              {(years.length ? years.sort((a, b) => a - b) : [year]).map((value) => (
+              {years.map((value) => (
                 <option key={value} value={value}>
                   {value}
                 </option>
               ))}
             </NativeSelect>
           </Box>
-          <Box sx={{ minWidth: 180, flex: "1 1 180px" }}>
-            <NativeSelect label="Month" name="month" defaultValue={String(month)}>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((value) => (
-                <option key={value} value={value}>
-                  {monthName(value)}
-                </option>
-              ))}
-            </NativeSelect>
-          </Box>
+          {grain !== "year" ? (
+            <Box sx={{ minWidth: 160, flex: "1 1 160px" }}>
+              <NativeSelect label={partFieldLabel(grain)} name="part" defaultValue={String(part)}>
+                {Array.from({ length: partMax }, (_, i) => i + 1).map((value) => (
+                  <option key={value} value={value}>
+                    {partOptionLabel(grain, value)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Box>
+          ) : (
+            <input type="hidden" name="part" value="1" />
+          )}
           <Button type="submit" variant="contained" color="primary">
-            Show month
+            Show report
           </Button>
         </Box>
       </MainCard>
@@ -104,14 +118,14 @@ export default async function MonthlyOverviewPage({
           <KpiCard
             label="Money received"
             value={formatMoney(overview.buyerReceived.toNumber())}
-            subtitle="Cash in from buyers this month"
+            subtitle="Cash in from buyers in this period"
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <KpiCard
             label="Paid to publishers"
             value={formatMoney(overview.publisherPaid.toNumber())}
-            subtitle="Cash out for traffic this month"
+            subtitle="Cash out for traffic in this period"
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -125,11 +139,7 @@ export default async function MonthlyOverviewPage({
           <KpiCard
             label={overview.profitLabel || "Profit"}
             value={formatMoney(overview.profit.toNumber())}
-            subtitle={
-              mom === 0
-                ? `Same as ${monthName(prev.month)}`
-                : `${mom > 0 ? "Up" : "Down"} ${formatMoney(Math.abs(mom))} vs ${monthName(prev.month)}`
-            }
+            subtitle="After publisher payouts and expenses"
           />
         </Grid>
       </Grid>
@@ -169,17 +179,17 @@ export default async function MonthlyOverviewPage({
 
       {!hasLines ? (
         <EmptyState
-          title="No activity this month yet"
-          description="When you create invoices or record expenses for this month, the breakdowns appear here."
-          actionHref="/buyers/generate"
-          actionLabel="Create invoice"
+          title="No activity in this period"
+          description="Try another range, or upload historical invoices and expenses from Settings → Import."
+          actionHref="/settings?tab=import"
+          actionLabel="Upload history"
         />
       ) : (
         <Grid container spacing={gridSpacing}>
           <Grid size={{ xs: 12, lg: 4 }}>
             <MainCard content={false} title="Buyers">
               <SummaryTable
-                empty="No buyer remittances this month."
+                empty="No buyer remittances in this period."
                 rows={lines.buyers.map((row) => [row.name, row.actual.toNumber(), row.received.toNumber()])}
                 actualLabel="Invoiced"
                 paidLabel="Received"
@@ -189,7 +199,7 @@ export default async function MonthlyOverviewPage({
           <Grid size={{ xs: 12, lg: 4 }}>
             <MainCard content={false} title="Publishers">
               <SummaryTable
-                empty="No publisher payments this month."
+                empty="No publisher payments in this period."
                 rows={lines.publishers.map((row) => [row.name, row.actual.toNumber(), row.paid.toNumber()])}
                 actualLabel="Owed"
                 paidLabel="Paid"
@@ -199,7 +209,7 @@ export default async function MonthlyOverviewPage({
           <Grid size={{ xs: 12, lg: 4 }}>
             <MainCard content={false} title="Expenses">
               <SummaryTable
-                empty="No expenses this month."
+                empty="No expenses overlapping this period."
                 rows={lines.expenses.map((row) => [row.label, row.actual.toNumber(), row.paid.toNumber()])}
                 actualLabel="Booked"
                 paidLabel="Paid"
@@ -210,6 +220,25 @@ export default async function MonthlyOverviewPage({
       )}
     </Box>
   );
+}
+
+function grainLabel(grain: ReportGrain) {
+  if (grain === "week") return "Weekly";
+  if (grain === "quarter") return "Quarterly";
+  if (grain === "year") return "Yearly";
+  return "Monthly";
+}
+
+function partFieldLabel(grain: ReportGrain) {
+  if (grain === "week") return "Week";
+  if (grain === "quarter") return "Quarter";
+  return "Month";
+}
+
+function partOptionLabel(grain: ReportGrain, value: number) {
+  if (grain === "week") return `Week ${value}`;
+  if (grain === "quarter") return `Q${value}`;
+  return monthName(value);
 }
 
 function MoneyRow({ label, value, strong }: { label: string; value: number; strong?: boolean }) {

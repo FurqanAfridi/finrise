@@ -2,12 +2,23 @@
 
 import { revalidatePath } from "next/cache";
 import { PaidApprovalStatus, PaymentStatus } from "@prisma/client";
-import { parseInvoiceStatus, parsePaymentStatus, parseRateType } from "@/lib/status";
+import { parsePeriodLabel } from "@/lib/finance/period";
 import { parsePaymentTermsDays } from "@/lib/finance/invoice";
 import { prisma } from "@/lib/prisma";
+import { parseInvoiceStatus, parsePaymentStatus, parseRateType } from "@/lib/status";
 import { requireTenantAdmin } from "@/lib/tenant";
 
 type ImportKind = "buyers" | "publishers" | "expenses";
+
+export type ImportCsvResult = {
+  ok?: boolean;
+  error?: string;
+  kind?: ImportKind;
+  commit?: boolean;
+  created?: number;
+  errors?: string[];
+  sample?: string[];
+};
 
 function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
@@ -60,14 +71,51 @@ function date(raw: string): Date | null {
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
-export async function importCsvAction(formData: FormData) {
+function resolvePeriod(
+  row: Record<string, string>,
+  fallbackYear: number,
+): { start: Date | null; end: Date | null; label: string | null } {
+  const label = row.date_range || row.period || row.period_label || null;
+  if (label) {
+    const parsed = parsePeriodLabel(label, fallbackYear);
+    if (parsed.start) return { ...parsed, label };
+  }
+  const startRaw = row.period_start || row.start_date;
+  const endRaw = row.period_end || row.end_date;
+  const start = date(startRaw);
+  let end = date(endRaw);
+  if (start && !end) {
+    end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+  }
+  return { start, end, label };
+}
+
+function yearFromDue(row: Record<string, string>, fallback: number) {
+  const due = date(row.due_date);
+  return due?.getUTCFullYear() ?? fallback;
+}
+
+export async function importCsvAction(
+  _prev: ImportCsvResult,
+  formData: FormData,
+): Promise<ImportCsvResult> {
   const ctx = await requireTenantAdmin();
   const kind = String(formData.get("kind") ?? "buyers") as ImportKind;
+  if (!["buyers", "publishers", "expenses"].includes(kind)) {
+    return { error: "Choose what to import." };
+  }
   const commit = String(formData.get("mode")) === "commit";
   const csv = String(formData.get("csv") ?? "");
+  if (!csv.trim()) return { error: "Paste CSV rows before running the import." };
+
   const { rows } = parseCsv(csv);
+  if (rows.length === 0) return { error: "No data rows found. Include a header line and at least one row." };
+
   const errors: string[] = [];
+  const sample: string[] = [];
   let created = 0;
+  let inferredYear = new Date().getUTCFullYear();
 
   for (const [index, row] of rows.entries()) {
     const line = index + 2;
@@ -81,6 +129,9 @@ export async function importCsvAction(formData: FormData) {
         if (!category || !year || !month) {
           errors.push(`Row ${line}: category, year, and month are required`);
           continue;
+        }
+        if (sample.length < 5) {
+          sample.push(`${year}-${String(month).padStart(2, "0")} · ${category} · ${actual}`);
         }
         if (commit) {
           const categoryRow = await prisma.expenseCategory.upsert({
@@ -111,15 +162,24 @@ export async function importCsvAction(formData: FormData) {
         errors.push(`Row ${line}: name is required`);
         continue;
       }
+      inferredYear = yearFromDue(row, inferredYear);
+      const period = resolvePeriod(row, inferredYear);
+      if (period.start) inferredYear = period.start.getUTCFullYear();
+
       const total = num(row.total || row.total_revenue || row.amount) ?? 0;
-      const count = num(row.count || row.unit_count);
+      const count = num(row.count || row.unit_count || row.lead_count);
       const rate = num(row.rate || row.unit_rate);
       const terms = row.payment_terms || row.terms || "";
+
+      if (sample.length < 5) {
+        sample.push(`${name} · ${period.label || "no period"} · ${total}`);
+      }
+
       if (kind === "buyers") {
         if (commit) {
           const buyer = await prisma.buyer.upsert({
             where: { tenantId_name: { tenantId: ctx.tenantId, name } },
-            update: {},
+            update: { isActive: true },
             create: { tenantId: ctx.tenantId, name },
           });
           const verticalName = row.vertical;
@@ -136,7 +196,9 @@ export async function importCsvAction(formData: FormData) {
               tenantId: ctx.tenantId,
               buyerId: buyer.id,
               verticalId: vertical?.id,
-              periodLabel: row.date_range || row.period,
+              periodLabel: period.label,
+              periodStart: period.start,
+              periodEnd: period.end,
               dueDate: date(row.due_date),
               leadCount: count,
               rateType: parseRateType(row.rate_type),
@@ -159,7 +221,7 @@ export async function importCsvAction(formData: FormData) {
         if (commit) {
           const publisher = await prisma.publisher.upsert({
             where: { tenantId_name: { tenantId: ctx.tenantId, name } },
-            update: {},
+            update: { isActive: true },
             create: { tenantId: ctx.tenantId, name, isInternal: /internal/i.test(name) },
           });
           const verticalName = row.vertical;
@@ -179,7 +241,9 @@ export async function importCsvAction(formData: FormData) {
               tenantId: ctx.tenantId,
               publisherId: publisher.id,
               verticalId: vertical?.id,
-              periodLabel: row.date_range || row.period,
+              periodLabel: period.label,
+              periodStart: period.start,
+              periodEnd: period.end,
               weekLabel: row.week,
               monthLabel: row.month,
               dueDate: date(row.due_date),
@@ -204,17 +268,33 @@ export async function importCsvAction(formData: FormData) {
     }
   }
 
+  const result: ImportCsvResult = {
+    ok: true,
+    kind,
+    commit,
+    created,
+    errors,
+    sample,
+  };
+
   await prisma.setting.upsert({
     where: { tenantId_key: { tenantId: ctx.tenantId, key: "lastCsvImport" } },
-    update: { value: JSON.stringify({ kind, commit, created, errors }) },
+    update: { value: JSON.stringify({ ...result, at: new Date().toISOString() }) },
     create: {
       tenantId: ctx.tenantId,
       key: "lastCsvImport",
-      value: JSON.stringify({ kind, commit, created, errors }),
+      value: JSON.stringify({ ...result, at: new Date().toISOString() }),
     },
   });
-  revalidatePath("/settings");
-  revalidatePath("/buyers");
-  revalidatePath("/publishers");
-  revalidatePath("/expenses");
+
+  if (commit) {
+    revalidatePath("/settings");
+    revalidatePath("/buyers");
+    revalidatePath("/publishers");
+    revalidatePath("/expenses");
+    revalidatePath("/reports");
+    revalidatePath("/dashboard");
+  }
+
+  return result;
 }

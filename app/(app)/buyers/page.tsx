@@ -81,7 +81,7 @@ export default async function BuyersPage({
           where: { tenantId: ctx.tenantId, id: ctx.linkedBuyerId ?? "__none__" },
           orderBy: { name: "asc" },
         })
-      : prisma.buyer.findMany({ where: { tenantId: ctx.tenantId }, orderBy: { name: "asc" } }),
+      : prisma.buyer.findMany({ where: { tenantId: ctx.tenantId, isActive: true }, orderBy: { name: "asc" } }),
     portal
       ? Promise.resolve([] as Awaited<ReturnType<typeof prisma.vertical.findMany>>)
       : prisma.vertical.findMany({ where: { tenantId: ctx.tenantId }, orderBy: { name: "asc" } }),
