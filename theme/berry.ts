@@ -224,6 +224,20 @@ export function createBerryTheme(mode: PaletteMode): Theme {
           },
         },
       },
+      // Keep outlined labels out of the way of native <select> selected text.
+      MuiSelect: {
+        defaultProps: {
+          displayEmpty: true,
+        },
+      },
+      MuiNativeSelect: {
+        styleOverrides: {
+          select: {
+            // Avoid clipped / overlapping option text next to the chevron.
+            paddingRight: 32,
+          },
+        },
+      },
       MuiChip: {
         styleOverrides: {
           root: { fontWeight: 600 },

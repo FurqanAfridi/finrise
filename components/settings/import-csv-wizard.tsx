@@ -46,7 +46,7 @@ export function ImportCsvWizard() {
                 label="What to import"
                 value={kind}
                 onChange={(e) => setKind(e.target.value)}
-                slotProps={{ select: { native: true } }}
+                slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
               >
                 <option value="buyers">Buyer invoices</option>
                 <option value="publishers">Publisher payables</option>
@@ -64,7 +64,7 @@ export function ImportCsvWizard() {
                     ? "Checks for problems without saving."
                     : "Writes rows to the ledger. Use only after a clean dry run."
                 }
-                slotProps={{ select: { native: true } }}
+                slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
               />
             </Box>
           ) : null}

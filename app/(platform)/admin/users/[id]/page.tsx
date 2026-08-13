@@ -117,7 +117,18 @@ export default async function PlatformUserDetailPage({
       >
         <Typography variant="subtitle2">Add to a company</Typography>
         <input type="hidden" name="userId" value={user.id} />
-        <TextField name="tenantId" label="Company" select required fullWidth defaultValue="">
+        <TextField
+          name="tenantId"
+          label="Company"
+          select
+          required
+          fullWidth
+          defaultValue=""
+          slotProps={{ inputLabel: { shrink: true } }}
+        >
+          <MenuItem value="">
+            <em>Select a company</em>
+          </MenuItem>
           {tenants.map((t) => (
             <MenuItem key={t.id} value={t.id}>
               {t.name}

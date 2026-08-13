@@ -72,7 +72,7 @@ export function SignupForm() {
         required
         value={country}
         onChange={(event) => setCountry(event.target.value)}
-        slotProps={{ select: { native: true } }}
+        slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
       >
         {COUNTRIES.map((row) => (
           <option key={row.code} value={row.code}>

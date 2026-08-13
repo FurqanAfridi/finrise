@@ -118,7 +118,7 @@ export function GenerateInvoiceForm({
                 setAddress(nextBuyer?.address ?? "");
                 setNetDays(String(nextBuyer?.defaultPaymentTermsDays ?? defaultNetDays ?? 7));
               }}
-              slotProps={{ select: { native: true } }}
+              slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
             >
               {buyers.map((row) => (
                 <option key={row.id} value={row.id}>
@@ -161,7 +161,7 @@ export function GenerateInvoiceForm({
                 label="Vertical"
                 value={verticalId}
                 onChange={(e) => setVerticalId(e.target.value)}
-                slotProps={{ select: { native: true } }}
+                slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
               >
                 <option value="">None</option>
                 {verticals.map((vertical) => (
@@ -186,7 +186,7 @@ export function GenerateInvoiceForm({
               label="Rate type"
               value={rateType}
               onChange={(e) => setRateType(e.target.value as RateType)}
-              slotProps={{ select: { native: true } }}
+              slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
             >
               {Object.values(RateType).map((value) => (
                 <option key={value} value={value}>

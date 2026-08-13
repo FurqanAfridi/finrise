@@ -50,6 +50,12 @@ function clampNumberString(value: string, min?: number, max?: number) {
   return String(next);
 }
 
+/** Shared props so outlined labels never overlap native <select> values. */
+export const nativeSelectSlotProps = {
+  select: { native: true as const },
+  inputLabel: { shrink: true },
+};
+
 export function NativeSelect({
   label,
   name,
@@ -69,7 +75,8 @@ export function NativeSelect({
     <TextField
       select
       slotProps={{
-        select: { native: true },
+        ...nativeSelectSlotProps,
+        inputLabel: hideLabel ? undefined : { shrink: true },
         htmlInput: { "aria-label": label },
       }}
       size="small"

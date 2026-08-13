@@ -56,14 +56,38 @@ export default async function PlatformMembershipsPage({
         spacing={1.5}
         sx={{ mb: 3, p: 2, border: 1, borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}
       >
-        <TextField name="userId" label="User" select required size="small" sx={{ minWidth: 220 }} defaultValue="">
+        <TextField
+          name="userId"
+          label="User"
+          select
+          required
+          size="small"
+          sx={{ minWidth: 220 }}
+          defaultValue=""
+          slotProps={{ inputLabel: { shrink: true } }}
+        >
+          <MenuItem value="">
+            <em>Select a user</em>
+          </MenuItem>
           {users.map((u) => (
             <MenuItem key={u.id} value={u.id}>
               {u.email}
             </MenuItem>
           ))}
         </TextField>
-        <TextField name="tenantId" label="Company" select required size="small" sx={{ minWidth: 200 }} defaultValue={tenantId ?? ""}>
+        <TextField
+          name="tenantId"
+          label="Company"
+          select
+          required
+          size="small"
+          sx={{ minWidth: 200 }}
+          defaultValue={tenantId ?? ""}
+          slotProps={{ inputLabel: { shrink: true } }}
+        >
+          <MenuItem value="">
+            <em>Select a company</em>
+          </MenuItem>
           {tenants.map((t) => (
             <MenuItem key={t.id} value={t.id}>
               {t.name}
