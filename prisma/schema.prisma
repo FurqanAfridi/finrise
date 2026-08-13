@@ -1,0 +1,559 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum TenantRole {
+  ADMIN
+  BROKER
+  ACCOUNTANT
+  PUBLISHER
+  BUYER
+}
+
+enum RateType {
+  CPL
+  CPA
+  DYNAMIC
+  OTHER
+  FLAT
+  PROFIT_SHARE
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  ON_HOLD
+  BUYER_LOST
+  NO_BILLABLES
+  TBD
+  WAITING_FOR_INV
+  BARGAINING
+  COMPENSATED
+  EXTRA_PAID
+  HOLD_ON_TCPA
+  WAITING_ON_BUYER
+}
+
+enum InvoiceStatus {
+  SENT
+  NOT_SENT
+  NO_BILLABLES
+}
+
+enum PartnerTier {
+  TOP_LINE
+  EQUITY
+}
+
+enum TaxOrder {
+  TAX_FIRST
+  TIER1_FIRST
+}
+
+enum PaidApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EmailSendStatus {
+  SENT
+  FAILED
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships          TenantMembership[]
+  invites              Invite[]
+  settings             Setting[]
+  financeSettings      FinanceSettings?
+  buyers               Buyer[]
+  publishers           Publisher[]
+  verticals            Vertical[]
+  buyerInvoices        BuyerInvoice[]
+  publisherInvoices    PublisherInvoice[]
+  expenses             Expense[]
+  expenseCategories    ExpenseCategory[]
+  recurringExpenses    RecurringExpense[]
+  partners             Partner[]
+  partnerWithdrawals   PartnerWithdrawal[]
+  partnerPayouts       PartnerPayout[]
+  fxTransfers          FxTransfer[]
+  ccCharges            CcCharge[]
+  monthlySnapshots     MonthlySnapshot[]
+  notifications        Notification[]
+  bankAccounts         BankAccount[]
+  monthReconciliations MonthReconciliation[]
+  companyProfile       CompanyProfile?
+  smtpMailboxes        SmtpMailbox[]
+  emailLogs            InvoiceEmailLog[]
+}
+
+model TenantMembership {
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  role        TenantRole @default(BROKER)
+  buyer       Buyer?     @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  buyerId     String?
+  publisher   Publisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  publisherId String?
+  createdAt   DateTime   @default(now())
+
+  @@unique([userId, tenantId])
+  @@unique([buyerId])
+  @@unique([publisherId])
+  @@index([tenantId])
+}
+
+model User {
+  id            String              @id @default(cuid())
+  email         String              @unique
+  passwordHash  String
+  name          String?
+  avatarKey     String?
+  role          Role                @default(MEMBER)
+  createdAt     DateTime            @default(now())
+  invites       Invite[]
+  memberships   TenantMembership[]
+  notifications Notification[]
+  paidApprovals PublisherInvoice[]  @relation("PaidApprovedBy")
+  emailsSent    InvoiceEmailLog[]
+}
+
+model Invite {
+  id          String     @id @default(cuid())
+  email       String
+  token       String     @unique
+  role        Role       @default(MEMBER)
+  tenantRole  TenantRole @default(BROKER)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  buyer       Buyer?     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerId     String?
+  publisher   Publisher? @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  publisherId String?
+  createdAt   DateTime   @default(now())
+
+  @@index([tenantId])
+  @@index([buyerId])
+  @@index([publisherId])
+}
+
+model Buyer {
+  id                      String              @id @default(cuid())
+  tenant                  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId                String
+  name                    String
+  email                   String?
+  address                 String?
+  contactName             String?
+  defaultTerms            String?
+  defaultMethod           String?
+  defaultPaymentTermsDays Int                 @default(7)
+  invoices                BuyerInvoice[]
+  memberships             TenantMembership[]
+  invites                 Invite[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Publisher {
+  id                      String              @id @default(cuid())
+  tenant                  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId                String
+  name                    String
+  email                   String?
+  address                 String?
+  contactName             String?
+  defaultTerms            String?
+  defaultPaymentTermsDays Int                 @default(7)
+  isInternal              Boolean             @default(false)
+  invoices                PublisherInvoice[]
+  memberships             TenantMembership[]
+  invites                 Invite[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Vertical {
+  id                String             @id @default(cuid())
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId          String
+  name              String
+  buyerInvoices     BuyerInvoice[]
+  publisherInvoices PublisherInvoice[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model BuyerInvoice {
+  id               String        @id @default(cuid())
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId         String
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  periodLabel      String?
+  dueDate          DateTime?
+  buyer            Buyer         @relation(fields: [buyerId], references: [id])
+  buyerId          String
+  vertical         Vertical?     @relation(fields: [verticalId], references: [id])
+  verticalId       String?
+  leadCount        Decimal?      @db.Decimal(14, 2)
+  countLabel       String?
+  rateType         RateType      @default(OTHER)
+  rate             Decimal?      @db.Decimal(14, 4)
+  rateLabel        String?
+  revenue          Decimal       @db.Decimal(14, 2)
+  invoiceNumber    String?
+  terms            String?
+  paymentTermsDays Int?
+  paymentStatus    PaymentStatus @default(UNPAID)
+  invoiceStatus    InvoiceStatus @default(NOT_SENT)
+  receivable       Decimal       @db.Decimal(14, 2)
+  received         Decimal?      @db.Decimal(14, 2)
+  paidAt           DateTime?
+  paymentMethod    String?
+  comments         String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  emailLogs        InvoiceEmailLog[]
+
+  @@index([tenantId])
+  @@index([buyerId])
+  @@index([paymentStatus])
+  @@index([dueDate])
+  @@index([periodStart])
+}
+
+model PublisherInvoice {
+  id                 String              @id @default(cuid())
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId           String
+  monthLabel         String?
+  weekLabel          String?
+  periodStart        DateTime?
+  periodEnd          DateTime?
+  periodLabel        String?
+  dueDate            DateTime?
+  publisher          Publisher           @relation(fields: [publisherId], references: [id])
+  publisherId        String
+  vertical           Vertical?           @relation(fields: [verticalId], references: [id])
+  verticalId         String?
+  leadCount          Decimal?            @db.Decimal(14, 2)
+  countLabel         String?
+  rateType           RateType            @default(OTHER)
+  rate               Decimal?            @db.Decimal(14, 4)
+  rateLabel          String?
+  amount             Decimal             @db.Decimal(14, 2)
+  invoiceNumber      String?
+  terms              String?
+  paymentTermsDays   Int?
+  payable            Decimal             @db.Decimal(14, 2)
+  paid               Decimal?            @db.Decimal(14, 2)
+  paidAt             DateTime?
+  paymentMethod      String?
+  paymentStatus      PaymentStatus       @default(UNPAID)
+  paidApprovalStatus PaidApprovalStatus  @default(NOT_REQUIRED)
+  paidApprovedAt     DateTime?
+  paidApprovedBy     User?               @relation("PaidApprovedBy", fields: [paidApprovedById], references: [id])
+  paidApprovedById   String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([tenantId])
+  @@index([publisherId])
+  @@index([paymentStatus])
+  @@index([dueDate])
+  @@index([periodStart])
+  @@index([paidApprovalStatus])
+}
+
+model ExpenseCategory {
+  id        String             @id @default(cuid())
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  name      String
+  expenses  Expense[]
+  recurring RecurringExpense[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model RecurringExpense {
+  id         String          @id @default(cuid())
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String
+  category   ExpenseCategory @relation(fields: [categoryId], references: [id])
+  categoryId String
+  label      String
+  amount     Decimal         @db.Decimal(14, 2)
+  dayOfMonth Int
+  isActive   Boolean         @default(true)
+  expenses   Expense[]
+
+  @@index([tenantId])
+}
+
+model Expense {
+  id                 String           @id @default(cuid())
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId           String
+  year               Int
+  month              Int
+  category           String
+  label              String?
+  categoryRel        ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  categoryId         String?
+  paid               Decimal          @db.Decimal(14, 2)
+  actual             Decimal          @db.Decimal(14, 2)
+  notes              String?
+  paidAt             DateTime?
+  method             String?
+  recurringExpense   RecurringExpense? @relation(fields: [recurringExpenseId], references: [id])
+  recurringExpenseId String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([tenantId, year, month])
+}
+
+model Partner {
+  id           String               @id @default(cuid())
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId     String
+  name         String
+  tier         PartnerTier
+  sharePercent Decimal              @db.Decimal(5, 2)
+  isActive     Boolean              @default(true)
+  withdrawals  PartnerWithdrawal[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model PartnerWithdrawal {
+  id              String   @id @default(cuid())
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId        String
+  partner         Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId       String
+  amountBase      Decimal  @db.Decimal(14, 2)
+  baseCurrency    String   @default("USD")
+  targetCurrency  String?
+  conversionRate  Decimal? @db.Decimal(12, 4)
+  amountConverted Decimal? @db.Decimal(16, 2)
+  method          String?
+  date            DateTime
+  note            String?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([partnerId])
+}
+
+model FinanceSettings {
+  tenantId                String   @id
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  taxRatePercent          Decimal  @default(30) @db.Decimal(5, 2)
+  varianceToleranceAmount Decimal  @default(1.00) @db.Decimal(14, 2)
+  taxOrder                TaxOrder @default(TAX_FIRST)
+  fiscalMonthStartDay     Int      @default(1)
+}
+
+model CompanyProfile {
+  tenantId     String  @id
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalName    String?
+  address      String?
+  email        String?
+  phone        String?
+  taxId        String?
+  website      String?
+  bankName           String?
+  bankDetails        String?
+  bankAccountNumber  String?
+  bankRoutingNumber  String?
+  bankIban           String?
+  bankSwift          String?
+  paymentNotes       String?
+  logoMime     String?
+  logoData     Bytes?
+  country      String?
+  zipCode      String?
+  invoiceColor         String? @default("#5E35B1")
+  termsAndConditions   String?
+  defaultNetDays       Int     @default(7)
+}
+
+model PartnerPayout {
+  id        String    @id @default(cuid())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  person    String
+  amount    Decimal   @db.Decimal(14, 2)
+  date      DateTime?
+  year      Int?
+  month     Int?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+model FxTransfer {
+  id        String    @id @default(cuid())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  person    String
+  usd       Decimal?  @db.Decimal(14, 2)
+  pkr       Decimal?  @db.Decimal(16, 2)
+  rate      Decimal?  @db.Decimal(12, 4)
+  date      DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+model CcCharge {
+  id         String    @id @default(cuid())
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId   String
+  kind       String
+  monthLabel String?
+  date       DateTime?
+  amount     Decimal   @db.Decimal(14, 2)
+  notes      String?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+model MonthlySnapshot {
+  id        String  @id @default(cuid())
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  year      Int
+  month     Int
+  savings   Decimal @db.Decimal(14, 2)
+  withdrawn Decimal? @db.Decimal(14, 2)
+  remaining Decimal? @db.Decimal(14, 2)
+
+  @@unique([tenantId, year, month])
+  @@index([tenantId])
+}
+
+model Setting {
+  id       String @id @default(cuid())
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  key      String
+  value    String
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      String
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, userId, readAt])
+}
+
+model BankAccount {
+  id        String   @id @default(cuid())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  name      String
+  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model SmtpMailbox {
+  id          String   @id @default(cuid())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  label       String
+  host        String
+  port        Int      @default(587)
+  secure      Boolean  @default(false)
+  username    String
+  passwordEnc String
+  fromEmail   String
+  fromName    String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model InvoiceEmailLog {
+  id             String          @id @default(cuid())
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId       String
+  invoice        BuyerInvoice?   @relation(fields: [buyerInvoiceId], references: [id], onDelete: SetNull)
+  buyerInvoiceId String?
+  toEmail        String
+  subject        String
+  status         EmailSendStatus
+  error          String?
+  sentBy         User?           @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  sentById       String?
+  createdAt      DateTime        @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([buyerInvoiceId])
+}
+
+model MonthReconciliation {
+  id             String @id @default(cuid())
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId       String
+  year           Int
+  month          Int
+  statementTotal Decimal @db.Decimal(14, 2)
+  notes          String?
+
+  @@unique([tenantId, year, month])
+}

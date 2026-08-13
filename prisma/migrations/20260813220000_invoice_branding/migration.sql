@@ -1,0 +1,4 @@
+ALTER TABLE "CompanyProfile"
+ADD COLUMN "invoiceColor" TEXT DEFAULT '#5E35B1',
+ADD COLUMN "termsAndConditions" TEXT,
+ADD COLUMN "defaultNetDays" INTEGER NOT NULL DEFAULT 7;

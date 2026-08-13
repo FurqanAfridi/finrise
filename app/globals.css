@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* FinRise design tokens — single source of truth (light/dark pairs) */
+:root,
+html[data-color-mode="light"] {
+  color-scheme: light;
+
+  --fr-background: #fafbfc;
+  --fr-surface: #ffffff;
+  --fr-surface-muted: #f3f5f7;
+  --fr-border: #e5e9ef;
+  --fr-text: #1b2430;
+  --fr-text-muted: #6b7785;
+
+  --fr-primary: #366450;
+  --fr-primary-hover: #2b503f;
+  --fr-primary-muted: #e8f0ec;
+  --fr-primary-foreground: #ffffff;
+
+  --fr-success: #1b7a4e;
+  --fr-success-muted: #e6f5ee;
+  --fr-warning: #b86a00;
+  --fr-warning-muted: #fff4e5;
+  --fr-danger: #c0392b;
+  --fr-danger-muted: #fdecea;
+  --fr-info: #2b6cb0;
+  --fr-info-muted: #e8f1fb;
+
+  --fr-radius-sm: 8px;
+  --fr-radius-md: 12px;
+  --fr-radius-pill: 999px;
+  --fr-shadow: 0 1px 2px rgb(27 36 48 / 4%), 0 4px 16px rgb(27 36 48 / 6%);
+  --fr-content-max: 1200px;
+  --fr-sidebar-width: 260px;
+  --fr-sidebar-collapsed: 72px;
+  --fr-topbar-height: 64px;
+
+  background-color: var(--fr-background);
+  color: var(--fr-text);
+}
+
+html[data-color-mode="dark"] {
+  color-scheme: dark;
+
+  /* Green-tinted dark canvas — clearer depth, less muddy grey */
+  --fr-background: #0b1411;
+  --fr-surface: #15241e;
+  --fr-surface-muted: #101c17;
+  --fr-border: #2c4339;
+  --fr-text: #f1f7f3;
+  --fr-text-muted: #a3b8ac;
+
+  --fr-primary: #5ecf8e;
+  --fr-primary-hover: #79e0a4;
+  --fr-primary-muted: #163528;
+  --fr-primary-foreground: #06110c;
+
+  --fr-success: #4ade80;
+  --fr-success-muted: #123024;
+  --fr-warning: #f0b429;
+  --fr-warning-muted: #3a2e12;
+  --fr-danger: #ff7b72;
+  --fr-danger-muted: #3d1c1a;
+  --fr-info: #6cbcf0;
+  --fr-info-muted: #163246;
+
+  --fr-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 28px rgb(8 40 28 / 28%);
+
+  background-color: var(--fr-background);
+  color: var(--fr-text);
+}
+
+html,
+body {
+  min-height: 100%;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background-color: var(--fr-background);
+  color: var(--fr-text);
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+}
+
+.tabular-nums,
+.fr-money {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  nav,
+  header,
+  aside,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+}

@@ -1,0 +1,2 @@
+ALTER TABLE "CompanyProfile" ADD COLUMN IF NOT EXISTS "country" TEXT;
+ALTER TABLE "CompanyProfile" ADD COLUMN IF NOT EXISTS "zipCode" TEXT;
