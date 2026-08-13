@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: finrise
       POSTGRES_DB: finrise
     ports:
-      - "5432:5432"
+      # Use 5434 on hosts that already run Postgres/Supabase on 5432.
+      - "5434:5432"
     volumes:
       - finrise_pg:/var/lib/postgresql/data
 
