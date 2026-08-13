@@ -19,6 +19,8 @@ npx prisma generate
 npx prisma migrate deploy
 
 echo "==> Building Next.js"
+# Stale .next from a prior failed install can break Turbopack module resolution.
+rm -rf .next
 NODE_ENV=production npm run build
 
 echo "==> Restarting process"
