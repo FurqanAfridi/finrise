@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { InvoiceStatus } from "@prisma/client";
+import { InvoiceStatus, TenantRole } from "@prisma/client";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { invoiceEmailContent } from "@/lib/invoice-email";
 import { buildInvoicePdf, invoicePdfFilename } from "@/lib/invoice-pdf";
@@ -16,7 +16,10 @@ import {
   setDefaultSmtpMailbox,
   verifySmtp,
 } from "@/lib/smtp";
-import { canWrite, requireTenant, requireTenantAdmin } from "@/lib/tenant";
+import { formatMoney } from "@/lib/money";
+import { num } from "@/lib/utils";
+import { INVITE_FROM_EMAIL, platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
+import { canWrite, isPublisherPortal, requireTenant, requireTenantAdmin } from "@/lib/tenant";
 import { formField, parseEmail } from "@/lib/validation";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 
@@ -277,4 +280,112 @@ export async function sendInvoiceEmailAction(
     revalidatePath("/settings");
     return { error: message };
   }
+}
+
+/** Publisher sends their payable invoice to company admins / accountants via platform mail. */
+export async function sendPublisherInvoiceToCompanyAction(
+  _prev: { error?: string; ok?: boolean },
+  formData: FormData,
+): Promise<{ error?: string; ok?: boolean }> {
+  const ctx = await requireTenant();
+  if (!isPublisherPortal(ctx) || !ctx.linkedPublisherId) {
+    return { error: "Only publisher portal users can send invoices to the company this way." };
+  }
+  if (!platformMailReady()) {
+    return {
+      error: `Platform email is not configured. Ask support to set PLATFORM_SMTP_* so messages send from ${INVITE_FROM_EMAIL}.`,
+    };
+  }
+
+  const id = formField(formData, "id");
+  if (!id) return { error: "Invoice is missing." };
+
+  const invoice = await prisma.publisherInvoice.findFirst({
+    where: { id, tenantId: ctx.tenantId, publisherId: ctx.linkedPublisherId },
+    include: { publisher: true, vertical: true },
+  });
+  if (!invoice) return { error: "Invoice not found." };
+
+  const recipients = await prisma.tenantMembership.findMany({
+    where: {
+      tenantId: ctx.tenantId,
+      role: { in: [TenantRole.ADMIN, TenantRole.ACCOUNTANT] },
+    },
+    include: { user: { select: { email: true, name: true } } },
+  });
+  const emails = [
+    ...new Set(
+      recipients
+        .map((row) => row.user.email?.trim().toLowerCase())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+  if (emails.length === 0) {
+    return { error: "This company has no admin or accountant emails on file yet." };
+  }
+
+  const amount = formatMoney(num(invoice.payable));
+  const publisherName = invoice.publisher.name;
+  const invoiceLabel = invoice.invoiceNumber || invoice.periodLabel || invoice.id.slice(-8);
+  const appUrl = (process.env.AUTH_URL || "https://fin.ridgerisemedia.com").replace(/\/$/, "");
+  const href = `${appUrl}/publishers/${invoice.id}`;
+  const subject = `Publisher invoice from ${publisherName}: ${invoiceLabel} (${amount})`;
+  const text = [
+    `${publisherName} submitted an invoice to ${ctx.tenantName}.`,
+    "",
+    `Invoice: ${invoiceLabel}`,
+    `Amount: ${amount}`,
+    invoice.vertical?.name ? `Vertical: ${invoice.vertical.name}` : null,
+    invoice.periodLabel ? `Period: ${invoice.periodLabel}` : null,
+    invoice.dueDate ? `Due: ${invoice.dueDate.toISOString().slice(0, 10)}` : null,
+    "",
+    `Open in FinRise: ${href}`,
+    "",
+    `Sent via FinRise from ${INVITE_FROM_EMAIL} on behalf of ${publisherName}.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <p><strong>${escapeHtml(publisherName)}</strong> submitted an invoice to <strong>${escapeHtml(ctx.tenantName)}</strong>.</p>
+    <ul>
+      <li>Invoice: ${escapeHtml(invoiceLabel)}</li>
+      <li>Amount: ${escapeHtml(amount)}</li>
+      ${invoice.vertical?.name ? `<li>Vertical: ${escapeHtml(invoice.vertical.name)}</li>` : ""}
+      ${invoice.periodLabel ? `<li>Period: ${escapeHtml(invoice.periodLabel)}</li>` : ""}
+      ${invoice.dueDate ? `<li>Due: ${escapeHtml(invoice.dueDate.toISOString().slice(0, 10))}</li>` : ""}
+    </ul>
+    <p><a href="${escapeHtml(href)}">Review this payable in FinRise</a></p>
+    <p style="color:#6B7785;font-size:12px;">Sent from ${escapeHtml(INVITE_FROM_EMAIL)} with reference to ${escapeHtml(publisherName)}.</p>
+  `;
+
+  const sent = await sendPlatformMail({
+    to: emails,
+    subject,
+    text,
+    html,
+    replyTo: ctx.email || invoice.publisher.email || INVITE_FROM_EMAIL,
+  });
+  if ("error" in sent) return { error: sent.error };
+
+  await notifyReviewers({
+    tenantId: ctx.tenantId,
+    type: NOTIFICATION.INVOICE_EMAILED,
+    title: "Publisher invoice received",
+    body: `${publisherName} sent invoice ${invoiceLabel} (${amount})`,
+    href: `/publishers/${invoice.id}`,
+    excludeUserId: ctx.userId,
+  });
+
+  revalidatePath("/publishers");
+  revalidatePath(`/publishers/${invoice.id}`);
+  return { ok: true };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }

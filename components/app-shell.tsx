@@ -64,7 +64,7 @@ export function AppShell({
   tenantName?: string;
   tenantId?: string;
   tenantRole?: TenantRole;
-  memberships?: { tenantId: string; tenantName: string }[];
+  memberships?: { tenantId: string; tenantName: string; role?: TenantRole }[];
   unread?: number;
 }) {
   const pathname = usePathname();
@@ -252,11 +252,10 @@ export function AppShell({
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {row.tenantName}
                         </Typography>
-                        {row.tenantId === tenantId ? (
-                          <Typography variant="caption" color="text.secondary">
-                            Current
-                          </Typography>
-                        ) : null}
+                        <Typography variant="caption" color="text.secondary">
+                          {row.role ? TENANT_ROLE_LABEL[row.role] : ""}
+                          {row.tenantId === tenantId ? " · Current" : ""}
+                        </Typography>
                       </Box>
                     </MenuItem>
                   ))

@@ -54,11 +54,13 @@ export function PublisherInvoicesView({
   totals,
   canApprove,
   canManage = true,
+  isPortal = false,
 }: {
   rows: PublisherInvoiceRow[];
   totals: { payable: number; paid: number };
   canApprove: boolean;
   canManage?: boolean;
+  isPortal?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? null, [rows, selectedId]);
@@ -67,14 +69,16 @@ export function PublisherInvoicesView({
   if (rows.length === 0) {
     return (
       <EmptyState
-        title={canManage ? "No publisher payables yet" : "No invoices yet"}
+        title={isPortal ? "No invoices yet" : canManage ? "No publisher payables yet" : "No invoices yet"}
         description={
-          canManage
-            ? "Add a payable when you owe a publisher for leads or traffic."
-            : "When this company records a payable for you, it will show up here."
+          isPortal
+            ? "Create an invoice to bill this company for your traffic."
+            : canManage
+              ? "Add a payable when you owe a traffic source."
+              : "When this company records payables for you, they will show up here."
         }
-        actionHref={canManage ? "/publishers/new" : undefined}
-        actionLabel={canManage ? "New payable" : undefined}
+        actionHref={isPortal || canManage ? "/publishers/new" : undefined}
+        actionLabel={isPortal ? "Create invoice" : canManage ? "New payable" : undefined}
       />
     );
   }
@@ -237,7 +241,16 @@ export function PublisherInvoicesView({
             </Box>
             <Divider />
             <Stack spacing={1.25}>
-              {canManage ? (
+              {isPortal ? (
+                <>
+                  <Button component={Link} href={`/publishers/${selected.id}`} variant="contained" color="primary" fullWidth>
+                    Open invoice
+                  </Button>
+                  <Typography variant="body2" color="text.secondary">
+                    Open the invoice to edit details or send it to company admins and accountants.
+                  </Typography>
+                </>
+              ) : canManage ? (
                 <>
                   <Button component={Link} href={`/publishers/${selected.id}`} variant="contained" color="primary" fullWidth>
                     Edit payable

@@ -7,13 +7,8 @@ import Stack from "@mui/material/Stack";
 import { InvoiceStatus, PaymentStatus, RateType } from "@prisma/client";
 import { deleteBuyerInvoice, upsertBuyerInvoice } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
-import {
-  InvoiceStatusSelect,
-  NativeSelect,
-  PaymentStatusSelect,
-  RateTypeSelect,
-  TextInput,
-} from "@/components/forms";
+import { InvoiceStatusSelect, NativeSelect, PaymentStatusSelect, TextInput } from "@/components/forms";
+import { InvoiceLineFields } from "@/components/invoice-line-fields";
 import { isoDate } from "@/lib/dates";
 import { num } from "@/lib/utils";
 
@@ -79,39 +74,19 @@ export function BuyerInvoiceForm({
         <TextInput label="Period start" name="periodStart" type="date" defaultValue={isoDate(invoice?.periodStart)} />
         <TextInput label="Period end" name="periodEnd" type="date" defaultValue={isoDate(invoice?.periodEnd)} />
         <TextInput label="Due date" name="dueDate" type="date" defaultValue={isoDate(invoice?.dueDate)} />
-        <TextInput
-          label="Lead / call count"
-          name="leadCount"
-          defaultValue={invoice?.leadCount == null ? "" : String(num(invoice.leadCount))}
-          kind="int"
-          min={0}
+
+        <InvoiceLineFields
+          totalName="revenue"
+          totalLabel="Revenue"
+          mirrorName="receivable"
+          mirrorLabel="Receivable"
+          defaultLeadCount={invoice?.leadCount == null ? "" : String(num(invoice.leadCount))}
+          defaultRate={invoice?.rate == null ? "" : String(num(invoice.rate))}
+          defaultRateType={invoice?.rateType}
+          defaultTotal={invoice?.revenue == null ? "" : String(num(invoice.revenue))}
+          defaultMirror={invoice?.receivable == null ? "" : String(num(invoice.receivable))}
         />
-        <RateTypeSelect name="rateType" defaultValue={invoice?.rateType} />
-        <TextInput
-          label="Rate"
-          name="rate"
-          defaultValue={invoice?.rate == null ? "" : String(num(invoice.rate))}
-          kind="decimal"
-          maxDecimals={4}
-          min={0}
-        />
-        <TextInput
-          label="Revenue"
-          name="revenue"
-          required
-          defaultValue={invoice?.revenue == null ? "" : String(num(invoice.revenue))}
-          kind="decimal"
-          maxDecimals={2}
-          min={0}
-        />
-        <TextInput
-          label="Receivable"
-          name="receivable"
-          defaultValue={invoice?.receivable == null ? "" : String(num(invoice.receivable))}
-          kind="decimal"
-          maxDecimals={2}
-          min={0}
-        />
+
         <TextInput
           label="Received"
           name="received"

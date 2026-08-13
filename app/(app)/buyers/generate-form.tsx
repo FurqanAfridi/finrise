@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -53,6 +54,7 @@ export function GenerateInvoiceForm({
   const [rateType, setRateType] = useState<RateType>(RateType.CPL);
   const [rate, setRate] = useState("");
   const [amount, setAmount] = useState("");
+  const [amountUnlocked, setAmountUnlocked] = useState(false);
   const [comments, setComments] = useState("");
   const [state, action] = useActionState(generateBuyerInvoice, {});
 
@@ -60,6 +62,18 @@ export function GenerateInvoiceForm({
   const netDaysDefault = buyer?.defaultPaymentTermsDays ?? defaultNetDays ?? 7;
   const [netDays, setNetDays] = useState(String(netDaysDefault));
   const verticalName = verticals.find((row) => row.id === verticalId)?.name;
+
+  const computedAmount = useMemo(() => {
+    const count = Number(leadCount || 0);
+    const unit = Number(rate || 0);
+    if (rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE) return Number(amount || 0);
+    return Math.round(count * unit * 100) / 100;
+  }, [leadCount, rate, rateType, amount]);
+
+  const effectiveAmount =
+    amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE
+      ? Number(amount || 0)
+      : computedAmount;
 
   if (buyers.length === 0) {
     return (
@@ -71,7 +85,7 @@ export function GenerateInvoiceForm({
 
   const canNext =
     (step === 0 && Boolean(buyerId)) ||
-    (step === 1 && Boolean(amount) && Number(amount) > 0) ||
+    (step === 1 && effectiveAmount > 0) ||
     step === 2 ||
     step === 3;
 
@@ -93,7 +107,7 @@ export function GenerateInvoiceForm({
         <input type="hidden" name="leadCount" value={leadCount} />
         <input type="hidden" name="rateType" value={rateType} />
         <input type="hidden" name="rate" value={rate} />
-        <input type="hidden" name="revenue" value={amount} />
+        <input type="hidden" name="revenue" value={String(effectiveAmount || "")} />
         <input type="hidden" name="paymentTermsDays" value={netDays} />
         <input type="hidden" name="comments" value={comments} />
 
@@ -185,7 +199,11 @@ export function GenerateInvoiceForm({
               fullWidth
               label="Rate type"
               value={rateType}
-              onChange={(e) => setRateType(e.target.value as RateType)}
+              onChange={(e) => {
+                const next = e.target.value as RateType;
+                setRateType(next);
+                setAmountUnlocked(next === RateType.FLAT || next === RateType.PROFIT_SHARE);
+              }}
               slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
             >
               {Object.values(RateType).map((value) => (
@@ -197,7 +215,7 @@ export function GenerateInvoiceForm({
             <TextField
               size="small"
               fullWidth
-              label="Rate"
+              label="Lead cost / rate"
               value={rate}
               onChange={(e) => {
                 let next = e.target.value.replace(/[^\d.]/g, "");
@@ -207,15 +225,24 @@ export function GenerateInvoiceForm({
                 }
                 setRate(next.slice(0, 16));
               }}
-              slotProps={{ htmlInput: { inputMode: "decimal", maxLength: 16 } }}
+              disabled={rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE}
+              slotProps={{ htmlInput: { inputMode: "decimal", maxLength: 16 }, inputLabel: { shrink: true } }}
+              helperText="Multiplied by lead count"
             />
             <TextField
               size="small"
               fullWidth
               required
-              label="Amount"
-              value={amount}
+              label="Revenue"
+              value={
+                amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE
+                  ? amount
+                  : computedAmount
+                    ? computedAmount.toFixed(2)
+                    : ""
+              }
               onChange={(e) => {
+                if (!(amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE)) return;
                 let next = e.target.value.replace(/[^\d.]/g, "");
                 const dot = next.indexOf(".");
                 if (dot !== -1) {
@@ -223,8 +250,40 @@ export function GenerateInvoiceForm({
                 }
                 setAmount(next.slice(0, 16));
               }}
-              slotProps={{ htmlInput: { inputMode: "decimal", maxLength: 16 } }}
-              helperText="Total the buyer owes"
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: {
+                  inputMode: "decimal",
+                  maxLength: 16,
+                  readOnly: !(amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE),
+                },
+                input: {
+                  endAdornment:
+                    rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE ? undefined : (
+                      <InputAdornment position="end">
+                        <Button
+                          type="button"
+                          size="small"
+                          onClick={() => {
+                            if (!amountUnlocked) {
+                              setAmount(computedAmount ? computedAmount.toFixed(2) : "");
+                              setAmountUnlocked(true);
+                            } else {
+                              setAmountUnlocked(false);
+                            }
+                          }}
+                        >
+                          {amountUnlocked ? "Use calc" : "Edit"}
+                        </Button>
+                      </InputAdornment>
+                    ),
+                },
+              }}
+              helperText={
+                amountUnlocked
+                  ? "Manual override — click Use calc to return to lead count × rate"
+                  : `Auto: ${leadCount || "0"} × ${rate || "0"} = ${formatMoney(computedAmount)}. Click Edit to override.`
+              }
             />
             <Box sx={{ gridColumn: "1 / -1" }}>
               <TextField
@@ -331,7 +390,7 @@ export function GenerateInvoiceForm({
               <ReviewRow label="Buyer" value={buyer?.name ?? "—"} />
               <ReviewRow label="Email" value={email || "—"} />
               <ReviewRow label="Invoice #" value={invoiceNumber} />
-              <ReviewRow label="Amount" value={amount ? formatMoney(Number(amount)) : "—"} money />
+              <ReviewRow label="Amount" value={effectiveAmount ? formatMoney(effectiveAmount) : "—"} money />
               <ReviewRow label="Terms" value={`Net - ${netDays || "0"}`} />
               <ReviewRow label="Rate" value={`${RATE_TYPE_LABEL[rateType]}${rate ? ` · ${rate}` : ""}`} />
               <ReviewRow label="Vertical" value={verticalName || "None"} />

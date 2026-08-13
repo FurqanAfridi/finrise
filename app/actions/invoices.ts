@@ -187,7 +187,7 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   if (!leadCount.ok) return { error: leadCount.error };
   const rate = parseMoney(formField(formData, "rate"), "Rate", false);
   if (!rate.ok) return { error: rate.error };
-  const amount = parsePositiveMoney(formField(formData, "revenue"), "Amount");
+  const amount = parseMoney(formField(formData, "revenue"), "Amount", false);
   if (!amount.ok) return { error: amount.error };
   const netDays = parseInteger(formField(formData, "paymentTermsDays"), "NET days", 0, 365, true);
   if (!netDays.ok || netDays.value == null) {
@@ -214,7 +214,10 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   `;
 
   const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), RateType.CPL);
-  const revenue = amount.value;
+  const revenueFromForm = amount.value;
+  const computedRevenue = lineTotal(rateType, leadCount.value, rate.value, revenueFromForm).toNumber();
+  const revenue = revenueFromForm && revenueFromForm > 0 ? revenueFromForm : computedRevenue;
+  if (!revenue || revenue <= 0) return { error: "Enter lead count and rate, or set the amount." };
   const receivable = revenue;
   const paymentTermsDays = netDays.value;
   const terms = formatNetTerms(paymentTermsDays);
@@ -265,11 +268,26 @@ export async function markBuyerInvoiceSent(formData: FormData) {
 export async function upsertPublisherInvoice(formData: FormData) {
   const ctx = await requireTenant();
   const id = str(formData, "id");
-  const publisherId = str(formData, "publisherId");
+  let publisherId = str(formData, "publisherId");
+
+  // Publishers can create/edit invoices for their own linked contact only.
+  if (ctx.tenantRole === "PUBLISHER") {
+    if (!ctx.linkedPublisherId) return;
+    publisherId = ctx.linkedPublisherId;
+  } else if (!canWrite(ctx.tenantRole, ctx.platformRole)) {
+    return;
+  }
+
   if (!publisherId) return;
 
   const publisher = await prisma.publisher.findFirst({ where: { id: publisherId, tenantId: ctx.tenantId } });
   if (!publisher) return;
+
+  if (id) {
+    const existing = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+    if (!existing) return;
+    if (ctx.tenantRole === "PUBLISHER" && existing.publisherId !== ctx.linkedPublisherId) return;
+  }
 
   const previous = id
     ? await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } })
@@ -280,12 +298,13 @@ export async function upsertPublisherInvoice(formData: FormData) {
   const rate = dec(formData, "rate");
   const amountInput = dec(formData, "amount");
   const payableInput = dec(formData, "payable");
-  const paidInput = dec(formData, "paid");
+  const paidInput = ctx.tenantRole === "PUBLISHER" ? null : dec(formData, "paid");
   const paymentTermsDaysInput = dec(formData, "paymentTermsDays");
   if (hasInvalidNumber(leadCount, rate, amountInput, payableInput, paidInput, paymentTermsDaysInput)) return;
   const computed = lineTotal(rateType, leadCount, rate, amountInput);
-  const amount = amountInput ?? computed.toNumber();
-  const payable = payableInput ?? amount;
+  // Prefer computed when amount matches count×rate path and amount was posted from locked calc.
+  const amount = amountInput != null && !Number.isNaN(amountInput) ? amountInput : computed.toNumber();
+  const payable = payableInput != null && !Number.isNaN(payableInput) ? payableInput : amount;
   const terms = str(formData, "terms");
   const paymentTermsDays =
     paymentTermsDaysInput ?? parsePaymentTermsDays(terms, publisher.defaultPaymentTermsDays);
@@ -294,13 +313,14 @@ export async function upsertPublisherInvoice(formData: FormData) {
   const due =
     date(formData, "dueDate") ??
     (periodEnd || periodStart ? dueDate(periodEnd ?? periodStart ?? new Date(), paymentTermsDays) : null);
-  const paymentStatus = enumValue(
-    str(formData, "paymentStatus"),
-    Object.values(PaymentStatus),
-    PaymentStatus.UNPAID,
-  );
+  const paymentStatus =
+    ctx.tenantRole === "PUBLISHER"
+      ? PaymentStatus.UNPAID
+      : enumValue(str(formData, "paymentStatus"), Object.values(PaymentStatus), PaymentStatus.UNPAID);
   const markedPaid =
-    paymentStatus === PaymentStatus.PAID && previous?.paymentStatus !== PaymentStatus.PAID;
+    ctx.tenantRole !== "PUBLISHER" &&
+    paymentStatus === PaymentStatus.PAID &&
+    previous?.paymentStatus !== PaymentStatus.PAID;
 
   const data = {
     tenantId: ctx.tenantId,
@@ -345,7 +365,7 @@ export async function upsertPublisherInvoice(formData: FormData) {
   }
 
   revalidateLedgers();
-  redirect("/publishers");
+  redirect(ctx.tenantRole === "PUBLISHER" ? `/publishers/${saved.id}` : "/publishers");
 }
 
 export async function deletePublisherInvoice(formData: FormData) {

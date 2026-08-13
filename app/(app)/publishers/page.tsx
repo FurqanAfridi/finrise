@@ -145,8 +145,8 @@ export default async function PublishersPage({
             ? `${total} invoice${total === 1 ? "" : "s"} for your account · ${formatMoney(num(totals._sum.payable))} owed`
             : `${total} payable${total === 1 ? "" : "s"} · ${formatMoney(num(totals._sum.payable))} owed · ${formatMoney(num(totals._sum.paid))} paid`
         }
-        actionHref={writer ? "/publishers/new" : undefined}
-        actionLabel={writer ? "New payable" : undefined}
+        actionHref={writer || portal ? "/publishers/new" : undefined}
+        actionLabel={portal ? "Create invoice" : writer ? "New payable" : undefined}
       />
 
       <FilterBar basePath="/publishers" query={paginationQuery} chips={chips}>
@@ -192,6 +192,7 @@ export default async function PublishersPage({
         }}
         canApprove={approver}
         canManage={writer}
+        isPortal={portal}
       />
       <Pagination page={page} pageCount={pageCount} basePath="/publishers" query={paginationQuery} />
     </Box>

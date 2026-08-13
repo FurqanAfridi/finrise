@@ -4,6 +4,7 @@ import {
   IconCash,
   IconChartBar,
   IconDashboard,
+  IconFilePlus,
   IconReceipt2,
   IconSettings,
   IconTruckDelivery,
@@ -40,7 +41,8 @@ export function getNavSections(role?: TenantRole): NavSection[] {
         items: [
           { href: "/dashboard", label: "Dashboard", icon: IconDashboard, mobilePrimary: true },
           { href: "/publishers", label: "My invoices", icon: IconReceipt2, mobilePrimary: true },
-          { href: "/payouts", label: "Payments", icon: IconCash, mobilePrimary: true },
+          { href: "/publishers/new", label: "Create invoice", icon: IconFilePlus, mobilePrimary: true },
+          { href: "/payouts", label: "Payments", icon: IconCash },
         ],
       },
     ];

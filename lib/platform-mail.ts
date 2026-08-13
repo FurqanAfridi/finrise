@@ -38,21 +38,23 @@ async function platformTransporter() {
 }
 
 export async function sendPlatformMail(message: {
-  to: string;
+  to: string | string[];
   subject: string;
   text: string;
   html: string;
+  replyTo?: string;
 }) {
   const ready = await platformTransporter();
   if ("error" in ready) return ready;
   const from = `${INVITE_FROM_NAME} <${INVITE_FROM_EMAIL}>`;
+  const to = Array.isArray(message.to) ? message.to.join(", ") : message.to;
   await ready.transporter.sendMail({
     from,
-    to: message.to,
+    to,
     subject: message.subject,
     text: message.text,
     html: message.html,
-    replyTo: INVITE_FROM_EMAIL,
+    replyTo: message.replyTo || INVITE_FROM_EMAIL,
   });
   return { ok: true } as const;
 }

@@ -6,7 +6,8 @@ import Stack from "@mui/material/Stack";
 import { PaymentStatus, RateType } from "@prisma/client";
 import { deletePublisherInvoice, upsertPublisherInvoice } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
-import { NativeSelect, PaymentStatusSelect, RateTypeSelect, TextInput } from "@/components/forms";
+import { NativeSelect, PaymentStatusSelect, TextInput } from "@/components/forms";
+import { InvoiceLineFields } from "@/components/invoice-line-fields";
 import { isoDate } from "@/lib/dates";
 import { num } from "@/lib/utils";
 
@@ -38,27 +39,37 @@ export function PublisherInvoiceForm({
   invoice,
   publishers,
   verticals,
+  lockedPublisherId,
+  submitLabel,
 }: {
   invoice?: Invoice;
   publishers: { id: string; name: string }[];
   verticals: { id: string; name: string }[];
+  /** When set (publisher portal), the publisher field is fixed. */
+  lockedPublisherId?: string;
+  submitLabel?: string;
 }) {
+  const publisherId = lockedPublisherId ?? invoice?.publisherId;
   return (
-    <MainCard title={invoice?.id ? "Edit payable" : "New payable"}>
+    <MainCard title={invoice?.id ? "Edit invoice" : "New invoice"}>
       <Box
         component="form"
         action={upsertPublisherInvoice}
         sx={{ display: "grid", gap: 2, gridTemplateColumns: { md: "repeat(3, 1fr)" } }}
       >
         {invoice?.id ? <input type="hidden" name="id" value={invoice.id} /> : null}
-        <NativeSelect label="Publisher" name="publisherId" defaultValue={invoice?.publisherId} required>
-          <option value="">Select publisher</option>
-          {publishers.map((publisher) => (
-            <option key={publisher.id} value={publisher.id}>
-              {publisher.name}
-            </option>
-          ))}
-        </NativeSelect>
+        {lockedPublisherId ? (
+          <input type="hidden" name="publisherId" value={lockedPublisherId} />
+        ) : (
+          <NativeSelect label="Publisher" name="publisherId" defaultValue={publisherId} required>
+            <option value="">Select publisher</option>
+            {publishers.map((publisher) => (
+              <option key={publisher.id} value={publisher.id}>
+                {publisher.name}
+              </option>
+            ))}
+          </NativeSelect>
+        )}
         <NativeSelect label="Vertical" name="verticalId" defaultValue={invoice?.verticalId ?? ""}>
           <option value="">None</option>
           {verticals.map((vertical) => (
@@ -74,47 +85,36 @@ export function PublisherInvoiceForm({
         <TextInput label="Period start" name="periodStart" type="date" defaultValue={isoDate(invoice?.periodStart)} />
         <TextInput label="Period end" name="periodEnd" type="date" defaultValue={isoDate(invoice?.periodEnd)} />
         <TextInput label="Due date" name="dueDate" type="date" defaultValue={isoDate(invoice?.dueDate)} />
-        <TextInput
-          label="Lead / call count"
-          name="leadCount"
-          defaultValue={invoice?.leadCount == null ? "" : String(num(invoice.leadCount))}
-          kind="int"
-          min={0}
+
+        <InvoiceLineFields
+          totalName="amount"
+          totalLabel="Amount"
+          mirrorName="payable"
+          mirrorLabel="Payable"
+          defaultLeadCount={invoice?.leadCount == null ? "" : String(num(invoice.leadCount))}
+          defaultRate={invoice?.rate == null ? "" : String(num(invoice.rate))}
+          defaultRateType={invoice?.rateType}
+          defaultTotal={invoice?.amount == null ? "" : String(num(invoice.amount))}
+          defaultMirror={invoice?.payable == null ? "" : String(num(invoice.payable))}
         />
-        <RateTypeSelect name="rateType" defaultValue={invoice?.rateType} />
-        <TextInput
-          label="Rate"
-          name="rate"
-          defaultValue={invoice?.rate == null ? "" : String(num(invoice.rate))}
-          kind="decimal"
-          maxDecimals={4}
-          min={0}
-        />
-        <TextInput
-          label="Amount"
-          name="amount"
-          required
-          defaultValue={invoice?.amount == null ? "" : String(num(invoice.amount))}
-          kind="decimal"
-          maxDecimals={2}
-          min={0}
-        />
-        <TextInput
-          label="Payable"
-          name="payable"
-          defaultValue={invoice?.payable == null ? "" : String(num(invoice.payable))}
-          kind="decimal"
-          maxDecimals={2}
-          min={0}
-        />
-        <TextInput
-          label="Paid"
-          name="paid"
-          defaultValue={invoice?.paid == null ? "" : String(num(invoice.paid))}
-          kind="decimal"
-          maxDecimals={2}
-          min={0}
-        />
+
+        {!lockedPublisherId ? (
+          <>
+            <TextInput
+              label="Paid"
+              name="paid"
+              defaultValue={invoice?.paid == null ? "" : String(num(invoice.paid))}
+              kind="decimal"
+              maxDecimals={2}
+              min={0}
+            />
+            <PaymentStatusSelect name="paymentStatus" defaultValue={invoice?.paymentStatus} />
+            <TextInput label="Paid at" name="paidAt" type="date" defaultValue={isoDate(invoice?.paidAt)} />
+            <TextInput label="Payment method" name="paymentMethod" defaultValue={invoice?.paymentMethod ?? ""} maxLength={80} />
+          </>
+        ) : (
+          <input type="hidden" name="paymentStatus" value={PaymentStatus.UNPAID} />
+        )}
         <TextInput label="Terms" name="terms" defaultValue={invoice?.terms ?? ""} maxLength={80} />
         <TextInput
           label="NET days"
@@ -124,14 +124,11 @@ export function PublisherInvoiceForm({
           min={0}
           max={365}
         />
-        <TextInput label="Paid at" name="paidAt" type="date" defaultValue={isoDate(invoice?.paidAt)} />
-        <TextInput label="Payment method" name="paymentMethod" defaultValue={invoice?.paymentMethod ?? ""} maxLength={80} />
-        <PaymentStatusSelect name="paymentStatus" defaultValue={invoice?.paymentStatus} />
         <Stack direction="row" spacing={1} sx={{ gridColumn: "1 / -1" }}>
           <Button type="submit" variant="contained" color="secondary">
-            Save payable
+            {submitLabel ?? (invoice?.id ? "Save invoice" : "Create invoice")}
           </Button>
-          {invoice?.id ? (
+          {invoice?.id && !lockedPublisherId ? (
             <Button type="submit" color="error" formAction={deletePublisherInvoice}>
               Delete
             </Button>
