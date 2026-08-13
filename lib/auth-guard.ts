@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
-import { Role } from "@prisma/client";
+import { headers } from "next/headers";
+import { Role } from "@/lib/roles";
 import { auth } from "@/auth";
+import { isPlatformAdminHost } from "@/lib/platform-host";
 import { requireTenant, requireTenantAdmin } from "@/lib/tenant";
 
 export async function requireSession() {
@@ -20,7 +22,8 @@ export { requireTenant, requireTenantAdmin };
 export async function requirePlatformAdmin() {
   const session = await requireSession();
   if (session.user.role !== Role.ADMIN) {
-    redirect("/dashboard");
+    const host = (await headers()).get("host");
+    redirect(isPlatformAdminHost(host) ? "/login?error=forbidden" : "/dashboard");
   }
   return session;
 }

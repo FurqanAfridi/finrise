@@ -1,25 +1,69 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isPlatformAdminHost } from "@/lib/platform-host";
 
 export const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/api/auth"];
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PREFIXES.some(
+function hasSession(request: NextRequest) {
+  return Boolean(
+    request.cookies.get("authjs.session-token") ??
+      request.cookies.get("__Secure-authjs.session-token"),
+  );
+}
+
+function isPublicPath(pathname: string, adminHost: boolean) {
+  if (adminHost && (pathname === "/signup" || pathname.startsWith("/signup/"))) {
+    return false;
+  }
+  return PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+}
 
-  const sessionCookie =
-    request.cookies.get("authjs.session-token") ??
-    request.cookies.get("__Secure-authjs.session-token");
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const adminHost = isPlatformAdminHost(request.headers.get("host"));
+  const session = hasSession(request);
+  const isPublic = isPublicPath(pathname, adminHost);
 
-  if (!sessionCookie && !isPublic) {
+  if (adminHost) {
+    if (pathname === "/signup" || pathname.startsWith("/signup/")) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    if (pathname === "/") {
+      return NextResponse.redirect(new URL(session ? "/admin" : "/login", request.url));
+    }
+    // Platform admin UI lives under /admin; keep auth/invite public.
+    const adminArea =
+      pathname === "/admin" ||
+      pathname.startsWith("/admin/") ||
+      isPublic;
+    if (!adminArea) {
+      return NextResponse.redirect(new URL(session ? "/admin" : "/login", request.url));
+    }
+    if (!session && !isPublic) {
+      const login = new URL("/login", request.url);
+      login.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(login);
+    }
+    if (session && pathname === "/login") {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Main FinRise host: keep /admin off this domain.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (!session && !isPublic) {
     const login = new URL("/login", request.url);
     login.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(login);
   }
 
-  if (sessionCookie && (pathname === "/login" || pathname === "/signup")) {
+  if (session && (pathname === "/login" || pathname === "/signup")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

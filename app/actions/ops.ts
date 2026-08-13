@@ -785,7 +785,7 @@ export async function acceptInvite(formData: FormData) {
       tenantRole: TenantRole;
       expiresAt: Date;
       usedAt: Date | null;
-      tenantId: string;
+      tenantId: string | null;
       buyerId: string | null;
       publisherId: string | null;
     }[]
@@ -812,29 +812,35 @@ export async function acceptInvite(formData: FormData) {
         role: invite.role,
       },
     });
+  } else if (invite.role === Role.ADMIN && user.role !== Role.ADMIN) {
+    await prisma.user.update({ where: { id: user.id }, data: { role: Role.ADMIN } });
   }
 
-  const membershipId = `c${randomBytes(12).toString("hex")}`;
-  await prisma.$executeRaw`
-    INSERT INTO "TenantMembership" (
-      id, "userId", "tenantId", role, "buyerId", "publisherId", "createdAt"
-    )
-    VALUES (
-      ${membershipId},
-      ${user.id},
-      ${invite.tenantId},
-      ${invite.tenantRole}::"TenantRole",
-      ${invite.buyerId},
-      ${invite.publisherId},
-      NOW()
-    )
-    ON CONFLICT ("userId", "tenantId") DO UPDATE SET
-      role = EXCLUDED.role,
-      "buyerId" = EXCLUDED."buyerId",
-      "publisherId" = EXCLUDED."publisherId"
-  `;
+  // Platform-admin invites have no company membership.
+  if (invite.tenantId) {
+    const membershipId = `c${randomBytes(12).toString("hex")}`;
+    await prisma.$executeRaw`
+      INSERT INTO "TenantMembership" (
+        id, "userId", "tenantId", role, "buyerId", "publisherId", "createdAt"
+      )
+      VALUES (
+        ${membershipId},
+        ${user.id},
+        ${invite.tenantId},
+        ${invite.tenantRole}::"TenantRole",
+        ${invite.buyerId},
+        ${invite.publisherId},
+        NOW()
+      )
+      ON CONFLICT ("userId", "tenantId") DO UPDATE SET
+        role = EXCLUDED.role,
+        "buyerId" = EXCLUDED."buyerId",
+        "publisherId" = EXCLUDED."publisherId"
+    `;
+    await setActiveCompanyCookie(invite.tenantId);
+  }
+
   await prisma.invite.update({ where: { id: invite.id }, data: { usedAt: new Date() } });
-  await setActiveCompanyCookie(invite.tenantId);
   return { ok: true };
 }
 

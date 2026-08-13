@@ -9,6 +9,7 @@ import { Logo } from "@/components/berry/logo";
 import { MainCard } from "@/components/berry/main-card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { prisma } from "@/lib/prisma";
+import { Role } from "@/lib/roles";
 
 export default async function InvitePage({
   params,
@@ -18,12 +19,13 @@ export default async function InvitePage({
   const { token } = await params;
   const invite = await prisma.invite.findUnique({ where: { token }, include: { tenant: true } });
   const invalid = !invite || invite.usedAt || invite.expiresAt < new Date();
+  const platformInvite = Boolean(invite && !invite.tenantId && invite.role === Role.ADMIN);
 
   async function submit(formData: FormData) {
     "use server";
     const result = await acceptInvite(formData);
     if (result && "ok" in result && result.ok) {
-      redirect("/login");
+      redirect(platformInvite ? "/login?callbackUrl=/admin" : "/login");
     }
   }
 
@@ -47,8 +49,17 @@ export default async function InvitePage({
               <Box component="form" action={submit} sx={{ width: 1, display: "grid", gap: 2 }}>
                 <input type="hidden" name="token" value={token} />
                 <Typography variant="body2" color="text.secondary">
-                  Join <strong>{invite.tenant.name}</strong> as {invite.tenantRole.toLowerCase()} for{" "}
-                  <strong>{invite.email}</strong>. You can belong to more than one company.
+                  {platformInvite ? (
+                    <>
+                      Join the FinRise <strong>platform admin</strong> team as <strong>{invite.email}</strong>. You will
+                      manage companies and data across the platform.
+                    </>
+                  ) : (
+                    <>
+                      Join <strong>{invite.tenant?.name}</strong> as {invite.tenantRole.toLowerCase()} for{" "}
+                      <strong>{invite.email}</strong>. You can belong to more than one company.
+                    </>
+                  )}
                 </Typography>
                 <TextField name="name" label="Name" fullWidth required />
                 <TextField
@@ -60,7 +71,7 @@ export default async function InvitePage({
                   slotProps={{ htmlInput: { minLength: 8 } }}
                 />
                 <Button color="secondary" fullWidth size="large" type="submit" variant="contained">
-                  Create account
+                  {platformInvite ? "Join as platform admin" : "Create account"}
                 </Button>
               </Box>
             )}

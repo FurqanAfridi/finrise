@@ -140,22 +140,23 @@ model User {
 }
 
 model Invite {
-  id          String     @id @default(cuid())
+  id          String      @id @default(cuid())
   email       String
-  token       String     @unique
-  role        Role       @default(MEMBER)
-  tenantRole  TenantRole @default(BROKER)
+  token       String      @unique
+  role        Role        @default(MEMBER)
+  tenantRole  TenantRole  @default(BROKER)
   expiresAt   DateTime
   usedAt      DateTime?
-  createdBy   User       @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy   User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdById String
-  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantId    String
-  buyer       Buyer?     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  /// Null for platform-admin invites (no company membership).
+  tenant      Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String?
+  buyer       Buyer?      @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   buyerId     String?
-  publisher   Publisher? @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  publisher   Publisher?  @relation(fields: [publisherId], references: [id], onDelete: Cascade)
   publisherId String?
-  createdAt   DateTime   @default(now())
+  createdAt   DateTime    @default(now())
 
   @@index([tenantId])
   @@index([buyerId])
