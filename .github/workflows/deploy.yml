@@ -23,8 +23,31 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script_stop: true
+          # Busy VPS SSH can drop under bot flood; allow longer connect + command window.
+          timeout: 60s
+          command_timeout: 20m
           script: |
             set -euo pipefail
+            APP_DIR="/var/www/finrise"
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+            bash scripts/server-deploy.sh
+
+      - name: Retry deploy if SSH was flaky
+        if: failure()
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          timeout: 90s
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            sleep 15
             APP_DIR="/var/www/finrise"
             cd "$APP_DIR"
             git fetch origin main
