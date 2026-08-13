@@ -21,7 +21,7 @@ export function SendPublisherInvoiceButton({ invoiceId }: { invoiceId: string })
       ) : null}
       {state.ok ? (
         <Typography variant="caption" color="success.main" sx={{ display: "block", mt: 0.5 }}>
-          Sent to company admins and accountants from info@ridgerisemedia.com.
+          Sent to company admins and accountants from the platform mailbox.
         </Typography>
       ) : null}
     </form>

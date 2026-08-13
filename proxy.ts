@@ -52,7 +52,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Main FinRise host: keep /admin off this domain.
+  // Main app host (fundlookup.co): keep /admin off this domain.
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

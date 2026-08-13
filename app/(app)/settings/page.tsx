@@ -282,7 +282,7 @@ export default async function SettingsPage({
           </SettingsSection>
           <SettingsSection
             title="Recent invites"
-            description="Links stay open until used or expired. The invitation email is also sent from info@ridgerisemedia.com."
+            description="Links stay open until used or expired. Invitation emails are sent from the platform mailbox."
           >
             {invites.length === 0 ? (
               <Box sx={{ px: 3, py: 3 }}>

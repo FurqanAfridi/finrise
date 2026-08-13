@@ -19,7 +19,7 @@ async function platformTransporter() {
   if (!platformSmtpConfigured()) {
     return {
       error:
-        "Platform mailbox is not configured. Set PLATFORM_SMTP_HOST, PLATFORM_SMTP_USER, and PLATFORM_SMTP_PASS to send invites from info@ridgerisemedia.com.",
+        "Platform mailbox is not configured. Set PLATFORM_SMTP_HOST, PLATFORM_SMTP_USER, and PLATFORM_SMTP_PASS.",
     } as const;
   }
   const port = Number(process.env.PLATFORM_SMTP_PORT || "587");

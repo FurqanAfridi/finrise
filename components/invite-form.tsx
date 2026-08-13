@@ -21,7 +21,7 @@ export function InviteForm() {
     <Box component="form" action={action}>
       <SettingsSection
         title="Invite someone"
-        description="We email an invitation from info@ridgerisemedia.com. Existing users join this company; new users create an account from the link."
+        description="We email an invitation from the platform mailbox. Existing users join this company; new users create an account from the link."
       >
         <SettingsRow label="Email" hint="They will sign in with this address.">
           <TextInput label="Email" name="email" type="email" required hideLabel />
