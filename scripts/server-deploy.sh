@@ -10,9 +10,8 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-export NODE_ENV=production
-
-echo "==> Installing dependencies"
+echo "==> Installing dependencies (including build tooling)"
+# Do not set NODE_ENV=production here — npm would skip needed build packages.
 npm ci
 
 echo "==> Prisma generate + migrate"
@@ -20,7 +19,7 @@ npx prisma generate
 npx prisma migrate deploy
 
 echo "==> Building Next.js"
-npm run build
+NODE_ENV=production npm run build
 
 echo "==> Restarting process"
 if command -v pm2 >/dev/null 2>&1; then
