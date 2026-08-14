@@ -46,15 +46,69 @@ else:
     print("Public host URLs already aligned")
 PY
 
-if ! command -v nginx >/dev/null 2>&1; then
-  echo "nginx not found; skip vhost update"
-  exit 0
-fi
-
 python3 - <<'PY'
 from pathlib import Path
 
-needles = ["fundlookup.co"]
+required = "app.fundlookup.co"
+changed = []
+
+def add_caddy_host(text: str) -> str:
+    if required in text:
+        return text
+    out = []
+    for line in text.splitlines(True):
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            out.append(line)
+            continue
+        if "fundlookup.co" in line and "{" in line and required not in line:
+            indent = line[: len(line) - len(line.lstrip())]
+            rest = line.strip()
+            brace = rest.find("{")
+            names = rest[:brace].rstrip()
+            tail = rest[brace:]
+            line = f"{indent}{required}, {names} {tail}\n" if line.endswith("\n") else f"{indent}{required}, {names} {tail}"
+            changed.append("caddy-site")
+        out.append(line)
+    return "".join(out)
+
+caddy_files = [Path("/etc/caddy/Caddyfile")]
+confd = Path("/etc/caddy/Caddyfile.d")
+if confd.is_dir():
+    caddy_files.extend(sorted(p for p in confd.iterdir() if p.is_file()))
+confd2 = Path("/etc/caddy/conf.d")
+if confd2.is_dir():
+    caddy_files.extend(sorted(p for p in confd2.iterdir() if p.is_file()))
+
+for path in caddy_files:
+    if not path.is_file():
+        continue
+    try:
+        text = path.read_text()
+    except OSError:
+        continue
+    if "fundlookup.co" not in text:
+        continue
+    updated = add_caddy_host(text)
+    if updated != text:
+        path.write_text(updated)
+        print(f"Added {required} to {path}")
+
+if not any("caddy-site" == c for c in changed):
+    print("Caddy already includes app.fundlookup.co or no Caddyfile found")
+PY
+
+if command -v caddy >/dev/null 2>&1; then
+  if caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1 || caddy fmt --overwrite /etc/caddy/Caddyfile >/dev/null 2>&1; then
+    true
+  fi
+  systemctl reload caddy 2>/dev/null || service caddy reload 2>/dev/null || caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || echo "Could not reload Caddy automatically"
+fi
+
+if command -v nginx >/dev/null 2>&1; then
+python3 - <<'PY'
+from pathlib import Path
+
 required = "app.fundlookup.co"
 roots = [Path("/etc/nginx/sites-enabled"), Path("/etc/nginx/conf.d"), Path("/etc/nginx/sites-available")]
 changed = []
@@ -68,9 +122,7 @@ for root in roots:
             text = path.read_text()
         except OSError:
             continue
-        if "fundlookup.co" not in text:
-            continue
-        if required in text:
+        if "fundlookup.co" not in text or required in text:
             continue
         updated = []
         for line in text.splitlines(True):
@@ -90,19 +142,9 @@ if changed:
 else:
     print("nginx already includes app.fundlookup.co or no vhost found")
 PY
-
-if nginx -t; then
-  systemctl reload nginx || service nginx reload || true
-else
-  echo "nginx -t failed; not reloading. Fix the vhost, then: certbot --nginx -d fundlookup.co -d app.fundlookup.co -d admin.fundlookup.co"
-  exit 1
-fi
-
-if command -v certbot >/dev/null 2>&1 && [[ ! -f "$APP_DIR/.host-ssl-app" ]]; then
-  if certbot --nginx --non-interactive --expand --redirect \
-    -d fundlookup.co -d app.fundlookup.co -d admin.fundlookup.co; then
-    touch "$APP_DIR/.host-ssl-app"
+  if nginx -t; then
+    systemctl reload nginx || service nginx reload || true
   else
-    echo "certbot expand skipped or failed; issue a cert that includes app.fundlookup.co"
+    echo "nginx -t failed; not reloading"
   fi
 fi
