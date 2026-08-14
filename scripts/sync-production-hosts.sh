@@ -46,63 +46,43 @@ else:
     print("Public host URLs already aligned")
 PY
 
-python3 - <<'PY'
+CADDYFILE="${CADDYFILE:-/root/database/supabase/docker/volumes/proxy/caddy/Caddyfile}"
+if [[ -f "$CADDYFILE" ]]; then
+  python3 - <<PY
 from pathlib import Path
-
+p = Path("$CADDYFILE")
+text = p.read_text()
 required = "app.fundlookup.co"
-changed = []
+if required in text:
+    print("Caddyfile already has app.fundlookup.co")
+else:
+    needle = "fundlookup.co, www.fundlookup.co {"
+    if needle in text:
+        text = text.replace(needle, "fundlookup.co, www.fundlookup.co, app.fundlookup.co {", 1)
+        p.write_text(text)
+        print("Added app.fundlookup.co to apex Caddy site")
+    elif "fundlookup.co {" in text:
+        text = text.replace("fundlookup.co {", "fundlookup.co, app.fundlookup.co {", 1)
+        p.write_text(text)
+        print("Added app.fundlookup.co next to fundlookup.co")
+    else:
+        p.write_text(text + """
 
-def add_caddy_host(text: str) -> str:
-    if required in text:
-        return text
-    out = []
-    for line in text.splitlines(True):
-        stripped = line.lstrip()
-        if stripped.startswith("#"):
-            out.append(line)
-            continue
-        if "fundlookup.co" in line and "{" in line and required not in line:
-            indent = line[: len(line) - len(line.lstrip())]
-            rest = line.strip()
-            brace = rest.find("{")
-            names = rest[:brace].rstrip()
-            tail = rest[brace:]
-            line = f"{indent}{required}, {names} {tail}\n" if line.endswith("\n") else f"{indent}{required}, {names} {tail}"
-            changed.append("caddy-site")
-        out.append(line)
-    return "".join(out)
-
-caddy_files = [Path("/etc/caddy/Caddyfile")]
-confd = Path("/etc/caddy/Caddyfile.d")
-if confd.is_dir():
-    caddy_files.extend(sorted(p for p in confd.iterdir() if p.is_file()))
-confd2 = Path("/etc/caddy/conf.d")
-if confd2.is_dir():
-    caddy_files.extend(sorted(p for p in confd2.iterdir() if p.is_file()))
-
-for path in caddy_files:
-    if not path.is_file():
-        continue
-    try:
-        text = path.read_text()
-    except OSError:
-        continue
-    if "fundlookup.co" not in text:
-        continue
-    updated = add_caddy_host(text)
-    if updated != text:
-        path.write_text(updated)
-        print(f"Added {required} to {path}")
-
-if not any("caddy-site" == c for c in changed):
-    print("Caddy already includes app.fundlookup.co or no Caddyfile found")
+# --- Fundlookup app ---
+app.fundlookup.co {
+    reverse_proxy 172.17.0.1:3001
+}
+""")
+        print("Appended app.fundlookup.co Caddy site block")
 PY
-
-if command -v caddy >/dev/null 2>&1; then
-  if caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1 || caddy fmt --overwrite /etc/caddy/Caddyfile >/dev/null 2>&1; then
-    true
+  if docker exec supabase-caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
+    && docker exec supabase-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile; then
+    echo "Caddy reloaded with app.fundlookup.co"
+  else
+    echo "Caddy reload failed; add app.fundlookup.co to $CADDYFILE and reload supabase-caddy"
   fi
-  systemctl reload caddy 2>/dev/null || service caddy reload 2>/dev/null || caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || echo "Could not reload Caddy automatically"
+else
+  echo "Caddyfile not found at $CADDYFILE"
 fi
 
 if command -v nginx >/dev/null 2>&1; then
