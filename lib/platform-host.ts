@@ -7,7 +7,11 @@ import {
 
 export { APP_HOST, PLATFORM_ADMIN_HOST };
 
-export const PLATFORM_ADMIN_HOSTS = new Set([PLATFORM_ADMIN_HOST, "localhost:3002"]);
+export const PLATFORM_ADMIN_HOSTS = new Set([
+  PLATFORM_ADMIN_HOST,
+  "localhost:3002",
+  ...(process.env.NODE_ENV !== "production" ? ["localhost", "127.0.0.1"] : []),
+]);
 
 export function normalizeHost(host: string | null | undefined): string {
   return (host ?? "").split(":")[0]?.toLowerCase() || "";
@@ -16,7 +20,9 @@ export function normalizeHost(host: string | null | undefined): string {
 export function isPlatformAdminHost(host: string | null | undefined): boolean {
   const h = (host ?? "").toLowerCase();
   if (PLATFORM_ADMIN_HOSTS.has(h)) return true;
-  return normalizeHost(host) === PLATFORM_ADMIN_HOST;
+  const bare = normalizeHost(host);
+  if (PLATFORM_ADMIN_HOSTS.has(bare)) return true;
+  return bare === PLATFORM_ADMIN_HOST;
 }
 
 export function isLegacyAppHost(host: string | null | undefined): boolean {

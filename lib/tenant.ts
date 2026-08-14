@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { TenantRole } from "@prisma/client";
+import { Role } from "@/lib/roles";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -41,7 +42,7 @@ export async function requireTenant(): Promise<TenantContext> {
     orderBy: { createdAt: "asc" },
   });
   if (memberships.length === 0) {
-    redirect("/no-tenant");
+    redirect(session.user.role === Role.ADMIN ? "/admin" : "/no-tenant");
   }
 
   const jar = await cookies();

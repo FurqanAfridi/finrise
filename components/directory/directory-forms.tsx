@@ -6,7 +6,7 @@ import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { inviteContact, removeContact, setContactActive, upsertDirectory } from "@/app/actions/ops";
-import { NativeSelect, TextInput } from "@/components/forms";
+import { NativeSelect, NetDaysSelect, TextInput } from "@/components/forms";
 
 type ContactKind = "buyer" | "publisher" | "vertical";
 
@@ -49,13 +49,10 @@ export function DirectoryAddForm() {
         <>
           <TextInput label="Contact name" name="contactName" required kind="letters" maxLength={80} />
           <TextInput label="Email" name="email" type="email" required maxLength={254} />
-          <TextInput
-            label="Default NET days"
+          <NetDaysSelect
             name="defaultPaymentTermsDays"
+            label="Default NET days"
             defaultValue={7}
-            kind="int"
-            min={0}
-            max={365}
             required
           />
           <Box sx={{ gridColumn: "1 / -1" }}>

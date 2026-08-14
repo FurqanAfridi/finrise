@@ -60,6 +60,8 @@ export function NativeSelect({
   label,
   name,
   defaultValue,
+  value,
+  onChange,
   children,
   required,
   hideLabel,
@@ -67,6 +69,8 @@ export function NativeSelect({
   label: string;
   name: string;
   defaultValue?: string;
+  value?: string;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   children: React.ReactNode;
   required?: boolean;
   hideLabel?: boolean;
@@ -83,11 +87,166 @@ export function NativeSelect({
       fullWidth
       label={hideLabel ? undefined : label}
       name={name}
-      defaultValue={defaultValue ?? ""}
+      {...(value !== undefined ? { value, onChange } : { defaultValue: defaultValue ?? "" })}
       required={required}
     >
       {children}
     </TextField>
+  );
+}
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const COMMON_NET_DAYS = [0, 7, 14, 15, 21, 30, 45, 60, 90];
+
+function yearChoices(extra?: string | number | null) {
+  const now = new Date().getUTCFullYear();
+  const years = new Set<number>();
+  for (let y = now + 1; y >= now - 8; y -= 1) years.add(y);
+  const parsed = Number(extra);
+  if (Number.isFinite(parsed) && parsed >= 1990 && parsed <= 2100) years.add(parsed);
+  return [...years].sort((a, b) => b - a);
+}
+
+export function YearSelect({
+  name = "year",
+  label = "Year",
+  defaultValue,
+  required,
+  allowEmpty,
+  emptyLabel = "All years",
+  hideLabel,
+}: {
+  name?: string;
+  label?: string;
+  defaultValue?: string | number | null;
+  required?: boolean;
+  allowEmpty?: boolean;
+  emptyLabel?: string;
+  hideLabel?: boolean;
+}) {
+  const value = defaultValue == null || defaultValue === "" ? "" : String(defaultValue);
+  return (
+    <NativeSelect label={label} name={name} defaultValue={value} required={required} hideLabel={hideLabel}>
+      {allowEmpty ? <option value="">{emptyLabel}</option> : null}
+      {yearChoices(value).map((year) => (
+        <option key={year} value={year}>
+          {year}
+        </option>
+      ))}
+    </NativeSelect>
+  );
+}
+
+export function MonthSelect({
+  name = "month",
+  label = "Month",
+  defaultValue,
+  required,
+  allowEmpty,
+  emptyLabel = "All months",
+  hideLabel,
+}: {
+  name?: string;
+  label?: string;
+  defaultValue?: string | number | null;
+  required?: boolean;
+  allowEmpty?: boolean;
+  emptyLabel?: string;
+  hideLabel?: boolean;
+}) {
+  const raw = defaultValue == null ? "" : String(defaultValue);
+  const value = raw === "all" ? "" : raw;
+  return (
+    <NativeSelect label={label} name={name} defaultValue={value} required={required} hideLabel={hideLabel}>
+      {allowEmpty ? <option value="">{emptyLabel}</option> : null}
+      {MONTH_NAMES.map((month, index) => (
+        <option key={month} value={index + 1}>
+          {month}
+        </option>
+      ))}
+    </NativeSelect>
+  );
+}
+
+export function DayOfMonthSelect({
+  name = "dayOfMonth",
+  label = "Day of month",
+  defaultValue,
+  required,
+  max = 28,
+  hideLabel,
+}: {
+  name?: string;
+  label?: string;
+  defaultValue?: string | number | null;
+  required?: boolean;
+  max?: number;
+  hideLabel?: boolean;
+}) {
+  const value = defaultValue == null || defaultValue === "" ? "1" : String(defaultValue);
+  return (
+    <NativeSelect label={label} name={name} defaultValue={value} required={required} hideLabel={hideLabel}>
+      {Array.from({ length: max }, (_, i) => i + 1).map((day) => (
+        <option key={day} value={day}>
+          {day}
+        </option>
+      ))}
+    </NativeSelect>
+  );
+}
+
+export function NetDaysSelect({
+  name = "paymentTermsDays",
+  label = "NET days",
+  defaultValue,
+  value,
+  onChange,
+  required,
+  hideLabel,
+}: {
+  name?: string;
+  label?: string;
+  defaultValue?: string | number | null;
+  value?: string;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  required?: boolean;
+  hideLabel?: boolean;
+}) {
+  const parsed = Number(value ?? defaultValue);
+  const selected = Number.isFinite(parsed) ? String(parsed) : "7";
+  const days = COMMON_NET_DAYS.includes(Number(selected))
+    ? COMMON_NET_DAYS
+    : [...COMMON_NET_DAYS, Number(selected)].sort((a, b) => a - b);
+  return (
+    <NativeSelect
+      label={label}
+      name={name}
+      required={required}
+      hideLabel={hideLabel}
+      {...(value !== undefined
+        ? { value: selected, onChange }
+        : { defaultValue: selected })}
+    >
+      {days.map((day) => (
+        <option key={day} value={day}>
+          {day === 0 ? "Due on receipt" : `NET ${day}`}
+        </option>
+      ))}
+    </NativeSelect>
   );
 }
 

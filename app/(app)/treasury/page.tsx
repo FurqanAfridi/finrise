@@ -9,7 +9,7 @@ import TableRow from "@mui/material/TableRow";
 import { upsertBankAccount, upsertFxTransfer, upsertMonthReconciliation, upsertTreasuryCharge } from "@/app/actions/ops";
 import { IncomeCard } from "@/components/berry/income-card";
 import { MainCard } from "@/components/berry/main-card";
-import { NativeSelect, TextInput } from "@/components/forms";
+import { MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { displayDate } from "@/lib/dates";
 import { money } from "@/lib/money";
@@ -155,8 +155,8 @@ export default async function TreasuryPage() {
         <Grid size={{ xs: 12, md: 6 }}>
           <MainCard title="Expense reconciliation" contentSX={{ display: "grid", gap: 2 }}>
             <Box component="form" action={upsertMonthReconciliation} sx={{ display: "grid", gap: 2 }}>
-              <TextInput label="Year" name="year" required defaultValue={now.getUTCFullYear()} kind="int" min={1990} max={2100} />
-              <TextInput label="Month" name="month" required defaultValue={now.getUTCMonth() + 1} kind="int" min={1} max={12} />
+              <YearSelect name="year" required defaultValue={now.getUTCFullYear()} />
+              <MonthSelect name="month" required defaultValue={now.getUTCMonth() + 1} />
               <TextInput label="Statement total" name="statementTotal" required kind="decimal" maxDecimals={2} min={0} />
               <Button type="submit" variant="contained" color="secondary">
                 Save statement

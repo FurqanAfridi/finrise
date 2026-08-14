@@ -18,7 +18,7 @@ import {
   upsertRecurringExpense,
 } from "@/app/actions/ops";
 import { MainCard } from "@/components/berry/main-card";
-import { NativeSelect, TextInput } from "@/components/forms";
+import { DayOfMonthSelect, MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { KpiCard } from "@/components/shared/kpi-card";
@@ -81,7 +81,6 @@ export default async function ExpensesPage({
     }),
   ]);
 
-  const years = Array.from({ length: 6 }, (_, i) => now.getUTCFullYear() - i);
   const actualTotal = num(totals._sum.actual);
   const paidTotal = num(totals._sum.paid);
   const formDefaults = editRow
@@ -146,23 +145,10 @@ export default async function ExpensesPage({
           sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "flex-end" }}
         >
           <Box sx={{ minWidth: 120, flex: "1 1 120px" }}>
-            <NativeSelect label="Year" name="year" defaultValue={String(year)}>
-              {years.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </NativeSelect>
+            <YearSelect name="year" required defaultValue={year} />
           </Box>
           <Box sx={{ minWidth: 140, flex: "1 1 140px" }}>
-            <NativeSelect label="Month" name="month" defaultValue={month ? String(month) : "all"}>
-              <option value="all">All months</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((value) => (
-                <option key={value} value={value}>
-                  {monthName(value)}
-                </option>
-              ))}
-            </NativeSelect>
+            <MonthSelect name="month" allowEmpty emptyLabel="All months" defaultValue={month ?? ""} />
           </Box>
           <Box sx={{ minWidth: 180, flex: "1 1 180px" }}>
             <NativeSelect label="Category" name="category" defaultValue={categoryFilter}>
@@ -193,8 +179,8 @@ export default async function ExpensesPage({
           >
             <Box component="form" action={upsertExpense} sx={{ display: "contents" }}>
               {formDefaults.id ? <input type="hidden" name="id" value={formDefaults.id} /> : null}
-              <TextInput label="Year" name="year" required defaultValue={formDefaults.year} kind="int" min={1990} max={2100} />
-              <TextInput label="Month" name="month" required defaultValue={formDefaults.month} kind="int" min={1} max={12} />
+              <YearSelect name="year" required defaultValue={formDefaults.year} />
+              <MonthSelect name="month" required defaultValue={formDefaults.month} />
               <TextInput
                 label="Category"
                 name="category"
@@ -242,22 +228,14 @@ export default async function ExpensesPage({
               )}
               <TextInput label="Label" name="label" required maxLength={120} />
               <TextInput label="Amount" name="amount" required kind="decimal" maxDecimals={2} min={0} />
-              <TextInput label="Day of month" name="dayOfMonth" defaultValue={1} kind="int" min={1} max={28} />
+              <DayOfMonthSelect name="dayOfMonth" defaultValue={1} required />
               <Button type="submit" variant="contained" color="secondary">
                 Save template
               </Button>
             </Box>
             <Box component="form" action={generateRecurringForMonth} sx={{ display: "grid", gap: 2 }}>
-              <TextInput label="Year" name="year" required defaultValue={year} kind="int" min={1990} max={2100} />
-              <TextInput
-                label="Month"
-                name="month"
-                required
-                defaultValue={month ?? now.getUTCMonth() + 1}
-                kind="int"
-                min={1}
-                max={12}
-              />
+              <YearSelect name="year" required defaultValue={year} />
+              <MonthSelect name="month" required defaultValue={month ?? now.getUTCMonth() + 1} />
               <Button type="submit" variant="outlined">
                 Generate this month
               </Button>

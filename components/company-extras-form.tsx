@@ -8,7 +8,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { saveCompanyBankAction, saveCompanyProfile, saveSettings } from "@/app/actions/ops";
 import { BankFields, type BankFieldValues } from "@/components/bank-fields";
-import { NativeSelect, TextInput } from "@/components/forms";
+import { DayOfMonthSelect, NativeSelect, NetDaysSelect, TextInput } from "@/components/forms";
 import { SettingsRow, SettingsSection } from "@/components/settings/settings-ui";
 import { DEFAULT_INVOICE_COLOR } from "@/lib/invoice-theme";
 
@@ -114,14 +114,11 @@ export function CompanyExtrasForm({
       >
         <SettingsRow label="Default NET days" hint="Printed as Net - those days. Due date is invoice date plus this many days.">
           <Box sx={{ maxWidth: 160, width: "100%" }}>
-            <TextInput
-              label="Default NET days"
+            <NetDaysSelect
               name="defaultNetDays"
+              label="Default NET days"
               defaultValue={defaultNetDays ?? 7}
               required
-              kind="int"
-              min={0}
-              max={365}
               hideLabel
             />
           </Box>
@@ -247,14 +244,11 @@ export function FinanceSettingsForm({
         </SettingsRow>
         <SettingsRow label="Fiscal month start" hint="Day of the month books roll to the next period. Usually 1.">
           <Box sx={{ maxWidth: 160, width: "100%" }}>
-            <TextInput
-              label="Fiscal month start day"
+            <DayOfMonthSelect
               name="fiscalMonthStartDay"
+              label="Fiscal month start day"
               defaultValue={fiscalMonthStartDay}
               required
-              kind="int"
-              min={1}
-              max={28}
               hideLabel
             />
           </Box>

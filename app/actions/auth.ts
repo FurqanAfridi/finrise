@@ -1,14 +1,17 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { AuthError } from "next-auth";
 import bcrypt from "bcryptjs";
-import { signIn, signOut } from "@/auth";
+import { signIn, signOut, auth } from "@/auth";
 import { createCompanyForUser, findExistingCompany } from "@/lib/company";
 import { prisma } from "@/lib/prisma";
+import { isPlatformAdminHost } from "@/lib/platform-host";
 import { platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
+import { Role } from "@/lib/roles";
 import { TENANT_COOKIE } from "@/lib/tenant";
 import { formField, parseCompanyIdentity, parseEmail, parsePassword, parsePersonName } from "@/lib/validation";
 
@@ -21,7 +24,7 @@ export async function loginAction(formData: FormData) {
     await signIn("credentials", {
       email,
       password,
-      redirectTo: callbackUrl || "/dashboard",
+      redirect: false,
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -29,6 +32,14 @@ export async function loginAction(formData: FormData) {
     }
     throw error;
   }
+
+  const session = await auth();
+  const host = (await headers()).get("host");
+  const safeCallback = callbackUrl.startsWith("/") ? callbackUrl : "/dashboard";
+  if (session?.user?.role === Role.ADMIN && (isPlatformAdminHost(host) || safeCallback === "/dashboard" || safeCallback === "/no-tenant")) {
+    redirect("/admin");
+  }
+  redirect(safeCallback);
 }
 
 export async function signupAction(_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> {

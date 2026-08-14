@@ -7,7 +7,7 @@ import Stack from "@mui/material/Stack";
 import { InvoiceStatus, PaymentStatus, RateType } from "@prisma/client";
 import { deleteBuyerInvoice, upsertBuyerInvoice } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
-import { InvoiceStatusSelect, NativeSelect, PaymentStatusSelect, TextInput } from "@/components/forms";
+import { InvoiceStatusSelect, NativeSelect, NetDaysSelect, PaymentStatusSelect, TextInput } from "@/components/forms";
 import { InvoiceLineFields } from "@/components/invoice-line-fields";
 import { isoDate } from "@/lib/dates";
 import { num } from "@/lib/utils";
@@ -95,14 +95,10 @@ export function BuyerInvoiceForm({
           maxDecimals={2}
           min={0}
         />
-        <TextInput
-          label="NET days"
+        <NetDaysSelect
           name="paymentTermsDays"
           defaultValue={invoice?.paymentTermsDays ?? 7}
           required
-          kind="int"
-          min={0}
-          max={365}
         />
         <PaymentStatusSelect name="paymentStatus" defaultValue={invoice?.paymentStatus} />
         <InvoiceStatusSelect name="invoiceStatus" defaultValue={invoice?.invoiceStatus} />

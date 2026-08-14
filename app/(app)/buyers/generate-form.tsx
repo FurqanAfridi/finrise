@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { RateType } from "@prisma/client";
 import { generateBuyerInvoice } from "@/app/actions/invoices";
+import { NativeSelect, NetDaysSelect } from "@/components/forms";
 import { MainCard } from "@/components/berry/main-card";
 import { WizardSteps } from "@/components/shared/wizard-steps";
 import { formatMoney } from "@/lib/money";
@@ -332,22 +333,11 @@ export function GenerateInvoiceForm({
               onChange={(e) => setPeriodLabel(e.target.value)}
               helperText="e.g. Aug 2026 week 2"
             />
-            <TextField
-              size="small"
-              fullWidth
-              required
-              label="NET days"
+            <NetDaysSelect
+              name="paymentTermsDaysPreview"
               value={netDays}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/\D/g, "").slice(0, 3);
-                const n = digits === "" ? "" : String(Math.min(365, Number(digits)));
-                setNetDays(n);
-              }}
-              helperText={`Printed as Net - ${netDays || "0"}`}
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: { inputMode: "numeric", maxLength: 3 },
-              }}
+              onChange={(e) => setNetDays(e.target.value)}
+              required
             />
             <TextField
               size="small"

@@ -5,7 +5,7 @@ import Button from "@mui/material/Button";
 import { PaymentStatus } from "@prisma/client";
 import { BuyerInvoicesView } from "@/components/shared/buyer-invoices-view";
 import { FilterBar } from "@/components/shared/filter-bar";
-import { NativeSelect, TextInput } from "@/components/forms";
+import { MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { formatMoney } from "@/lib/money";
@@ -187,8 +187,8 @@ export default async function BuyersPage({
             ))}
           </NativeSelect>
         ) : null}
-        <TextInput label="Year" name="year" defaultValue={year ?? ""} kind="int" min={1990} max={2100} />
-        <TextInput label="Month" name="month" defaultValue={month ?? ""} kind="int" min={1} max={12} />
+        <YearSelect name="year" defaultValue={year ?? ""} allowEmpty />
+        <MonthSelect name="month" defaultValue={month ?? ""} allowEmpty />
       </FilterBar>
 
       <BuyerInvoicesView

@@ -3,7 +3,7 @@ import Box from "@mui/material/Box";
 import { PaidApprovalStatus, PaymentStatus } from "@prisma/client";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { PublisherInvoicesView } from "@/components/shared/publisher-invoices-view";
-import { NativeSelect, TextInput } from "@/components/forms";
+import { MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { monthPeriodFilter } from "@/lib/finance/period";
@@ -179,8 +179,8 @@ export default async function PublishersPage({
             ))}
           </NativeSelect>
         ) : null}
-        <TextInput label="Year" name="year" defaultValue={year ?? ""} kind="int" min={1990} max={2100} />
-        <TextInput label="Month" name="month" defaultValue={month ?? ""} kind="int" min={1} max={12} />
+        <YearSelect name="year" defaultValue={year ?? ""} allowEmpty />
+        <MonthSelect name="month" defaultValue={month ?? ""} allowEmpty />
         {!portal ? <TextInput label="Week" name="week" defaultValue={week} maxLength={40} /> : null}
       </FilterBar>
 

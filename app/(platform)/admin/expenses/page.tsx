@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 import { platformDeleteExpense, platformUpdateExpense } from "@/app/actions/platform";
 import { PageHeader } from "@/components/page-header";
+import { MonthSelect, YearSelect } from "@/components/forms";
 import { Pagination } from "@/components/pagination";
 import { requirePlatformAdmin } from "@/lib/auth-guard";
 import { formatMoney } from "@/lib/money";
@@ -79,8 +80,8 @@ export default async function PlatformExpensesPage({
           <input type="hidden" name="id" value={editing.id} />
           <TextField name="category" label="Category" defaultValue={editing.category} fullWidth size="small" />
           <TextField name="label" label="Label" defaultValue={editing.label ?? ""} fullWidth size="small" />
-          <TextField name="year" label="Year" defaultValue={String(editing.year)} fullWidth size="small" />
-          <TextField name="month" label="Month" defaultValue={String(editing.month)} fullWidth size="small" />
+          <YearSelect name="year" required defaultValue={editing.year} />
+          <MonthSelect name="month" required defaultValue={editing.month} />
           <TextField name="paid" label="Paid" defaultValue={String(num(editing.paid))} fullWidth size="small" />
           <TextField name="actual" label="Actual" defaultValue={String(num(editing.actual))} fullWidth size="small" />
           <TextField name="method" label="Method" defaultValue={editing.method ?? ""} fullWidth size="small" />

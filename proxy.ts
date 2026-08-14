@@ -59,6 +59,9 @@ export function proxy(request: NextRequest) {
     if (session && pathname === "/login") {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
+    if (session && (pathname === "/no-tenant" || pathname === "/dashboard")) {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
     return NextResponse.next();
   }
 

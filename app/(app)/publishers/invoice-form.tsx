@@ -6,7 +6,7 @@ import Stack from "@mui/material/Stack";
 import { PaymentStatus, RateType } from "@prisma/client";
 import { deletePublisherInvoice, upsertPublisherInvoice } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
-import { NativeSelect, PaymentStatusSelect, TextInput } from "@/components/forms";
+import { NativeSelect, NetDaysSelect, PaymentStatusSelect, TextInput } from "@/components/forms";
 import { InvoiceLineFields } from "@/components/invoice-line-fields";
 import { isoDate } from "@/lib/dates";
 import { num } from "@/lib/utils";
@@ -116,13 +116,9 @@ export function PublisherInvoiceForm({
           <input type="hidden" name="paymentStatus" value={PaymentStatus.UNPAID} />
         )}
         <TextInput label="Terms" name="terms" defaultValue={invoice?.terms ?? ""} maxLength={80} />
-        <TextInput
-          label="NET days"
+        <NetDaysSelect
           name="paymentTermsDays"
           defaultValue={invoice?.paymentTermsDays ?? ""}
-          kind="int"
-          min={0}
-          max={365}
         />
         <Stack direction="row" spacing={1} sx={{ gridColumn: "1 / -1" }}>
           <Button type="submit" variant="contained" color="secondary">
