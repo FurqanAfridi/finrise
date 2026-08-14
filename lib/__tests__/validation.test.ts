@@ -44,6 +44,8 @@ describe("field validation", () => {
 
   it("checks authentic US routing and IBAN checksums", () => {
     expect(parseAbaRouting("021000021").ok).toBe(true);
+    expect(parseAbaRouting("12345678").ok).toBe(true);
+    expect(parseAbaRouting("1234567").ok).toBe(false);
     expect(parseAbaRouting("123456789").ok).toBe(false);
     expect(parseAccountNumber("abc123").ok).toBe(false);
     expect(parseAccountNumber("12345678").ok).toBe(true);
@@ -54,7 +56,7 @@ describe("field validation", () => {
   });
 
   it("requires routing for US bank details", () => {
-    const result = parseBankDetails({
+    const nine = parseBankDetails({
       country: "US",
       bankName: "Chase",
       accountNumber: "123456789",
@@ -62,7 +64,16 @@ describe("field validation", () => {
       iban: "",
       swift: "CHASUS33",
     });
-    expect(result.ok).toBe(true);
+    expect(nine.ok).toBe(true);
+    const eight = parseBankDetails({
+      country: "US",
+      bankName: "Chase",
+      accountNumber: "123456789",
+      routingNumber: "02100002",
+      iban: "",
+      swift: "",
+    });
+    expect(eight.ok).toBe(true);
   });
 
   it("requires a valid IBAN and SWIFT outside the US", () => {

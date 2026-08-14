@@ -35,7 +35,7 @@ export default async function ReportsIndexPage() {
     <Box>
       <PageHeader
         title="Reports"
-        description="See profit by week, month, quarter, or year — then drill into the breakdown."
+        description="See profit by week, month, quarter, or year, then drill into the breakdown."
       />
 
       <Grid container spacing={gridSpacing} sx={{ mb: 3 }}>
@@ -147,7 +147,7 @@ export default async function ReportsIndexPage() {
           </Button>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, lineHeight: 1.5 }}>
-          For weekly reports, pick the ISO week number (1–53). For quarters use 1–4. Yearly ignores the part field.
+          For weekly reports, pick the ISO week number (1 to 53). For quarters use 1 to 4. Yearly ignores the part field.
         </Typography>
       </MainCard>
 

@@ -15,6 +15,7 @@ export function InviteForm() {
     ok?: boolean;
     emailed?: boolean;
     inviteUrl?: string;
+    fieldErrors?: Record<string, string>;
   });
 
   return (
@@ -24,7 +25,7 @@ export function InviteForm() {
         description="We email an invitation from the platform mailbox. Existing users join this company; new users create an account from the link."
       >
         <SettingsRow label="Email" hint="They will sign in with this address.">
-          <TextInput label="Email" name="email" type="email" required hideLabel />
+          <TextInput label="Email" name="email" type="email" required hideLabel errorMessage={state.fieldErrors?.email} />
         </SettingsRow>
         <SettingsRow
           label="Role"
@@ -42,7 +43,7 @@ export function InviteForm() {
               Invitation emailed.
             </Typography>
           ) : null}
-          {state.error ? (
+          {state.error && !state.fieldErrors ? (
             <Typography color={state.ok ? "warning.main" : "error"} variant="body2" sx={{ mb: 1, lineHeight: 1.5 }}>
               {state.error}
             </Typography>

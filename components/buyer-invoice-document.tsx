@@ -75,13 +75,18 @@ export function BuyerInvoiceDocument({
           ) : null}
           <Box>
             <Typography sx={{ fontWeight: 700, fontSize: 22, lineHeight: 1.2 }}>{branding.legalName}</Typography>
+            {branding.invoiceRepresentativeName ? (
+              <Typography variant="body2" sx={{ color: "#4b5563", mt: 0.25 }}>
+                {branding.invoiceRepresentativeName}
+              </Typography>
+            ) : null}
             {branding.address ? (
               <Typography variant="body2" sx={{ whiteSpace: "pre-line", color: "#4b5563", mt: 0.5 }}>
                 {[branding.address, branding.zipCode, branding.countryLabel].filter(Boolean).join(", ")}
               </Typography>
             ) : null}
             <Typography variant="body2" sx={{ color: "#4b5563" }}>
-              {[branding.email, branding.phone, branding.website].filter(Boolean).join(" · ")}
+              {[branding.contactEmail, branding.contactPhone, branding.website].filter(Boolean).join(" · ")}
             </Typography>
             {branding.taxId ? (
               <Typography variant="body2" sx={{ color: "#4b5563" }}>
@@ -158,8 +163,8 @@ export function BuyerInvoiceDocument({
                 {[RATE_TYPE_LABEL[invoice.rateType], invoice.vertical?.name].filter(Boolean).join(" · ")}
               </Typography>
             </td>
-            <td className="num">{qty == null ? "—" : qty.toLocaleString()}</td>
-            <td className="num">{rate == null ? "—" : money(rate, currency)}</td>
+            <td className="num">{qty == null ? "n/a" : qty.toLocaleString()}</td>
+            <td className="num">{rate == null ? "n/a" : money(rate, currency)}</td>
             <td className="num">{money(amount, currency)}</td>
           </tr>
         </tbody>

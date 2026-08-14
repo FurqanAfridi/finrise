@@ -243,7 +243,7 @@ export default async function ExpensesPage({
         {visibleTemplates.length === 0 ? (
           <Box sx={{ px: 2.5, py: 3 }}>
             <Typography variant="body2" color="text.secondary">
-              No recurring templates yet. Save one above — salary, loan, purchases, and other categories are ready to use.
+              No recurring templates yet. Save one above. Salary, loan, purchases, and other categories are ready to use.
             </Typography>
           </Box>
         ) : (
@@ -332,7 +332,7 @@ export default async function ExpensesPage({
                         {monthName(row.month)} {row.year}
                       </TableCell>
                       <TableCell>{row.categoryRel?.name ?? row.category}</TableCell>
-                      <TableCell>{row.label ?? "—"}</TableCell>
+                      <TableCell>{row.label ?? "None"}</TableCell>
                       <TableCell align="right" className="fr-money">
                         {formatMoney(num(row.actual))}
                       </TableCell>

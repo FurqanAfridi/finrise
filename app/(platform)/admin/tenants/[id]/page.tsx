@@ -122,7 +122,7 @@ export default async function PlatformTenantDetailPage({
 
       {tenant.companyProfile ? (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Legal name: {tenant.companyProfile.legalName || "—"} · {tenant.companyProfile.email || "no email"}
+          Legal name: {tenant.companyProfile.legalName || "Not set"} · {tenant.companyProfile.email || "no email"}
         </Typography>
       ) : null}
 

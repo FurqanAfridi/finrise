@@ -5,17 +5,18 @@ import { resolveAvatarKey } from "@/lib/avatars";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { formField, parsePersonName } from "@/lib/validation";
+import type { FormActionState } from "@/lib/form-state";
 
 export async function updateProfileAction(
-  _prev: { error?: string; ok?: boolean },
+  _prev: FormActionState,
   formData: FormData,
-): Promise<{ error?: string; ok?: boolean }> {
+): Promise<FormActionState> {
   const ctx = await requireTenant();
   const nameRaw = formField(formData, "name").trim();
   let nameValue: string | null = null;
   if (nameRaw) {
     const name = parsePersonName(nameRaw, "Display name");
-    if (!name.ok) return { error: name.error };
+    if (!name.ok) return { error: name.error, fieldErrors: { name: name.error } };
     nameValue = name.value;
   }
 

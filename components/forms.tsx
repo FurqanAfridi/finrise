@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
@@ -65,6 +66,8 @@ export function NativeSelect({
   children,
   required,
   hideLabel,
+  errorMessage,
+  helperText,
 }: {
   label: string;
   name: string;
@@ -74,7 +77,12 @@ export function NativeSelect({
   children: React.ReactNode;
   required?: boolean;
   hideLabel?: boolean;
+  errorMessage?: string;
+  helperText?: string;
 }) {
+  const [inner, setInner] = useState(defaultValue ?? "");
+  const controlled = value !== undefined;
+  const current = controlled ? value : inner;
   return (
     <TextField
       select
@@ -87,8 +95,14 @@ export function NativeSelect({
       fullWidth
       label={hideLabel ? undefined : label}
       name={name}
-      {...(value !== undefined ? { value, onChange } : { defaultValue: defaultValue ?? "" })}
+      value={current}
+      onChange={(event) => {
+        if (!controlled) setInner(event.target.value);
+        onChange?.(event);
+      }}
       required={required}
+      error={Boolean(errorMessage)}
+      helperText={errorMessage || helperText}
     >
       {children}
     </TextField>
@@ -189,6 +203,7 @@ export function DayOfMonthSelect({
   required,
   max = 28,
   hideLabel,
+  errorMessage,
 }: {
   name?: string;
   label?: string;
@@ -196,10 +211,11 @@ export function DayOfMonthSelect({
   required?: boolean;
   max?: number;
   hideLabel?: boolean;
+  errorMessage?: string;
 }) {
   const value = defaultValue == null || defaultValue === "" ? "1" : String(defaultValue);
   return (
-    <NativeSelect label={label} name={name} defaultValue={value} required={required} hideLabel={hideLabel}>
+    <NativeSelect label={label} name={name} defaultValue={value} required={required} hideLabel={hideLabel} errorMessage={errorMessage}>
       {Array.from({ length: max }, (_, i) => i + 1).map((day) => (
         <option key={day} value={day}>
           {day}
@@ -217,6 +233,7 @@ export function NetDaysSelect({
   onChange,
   required,
   hideLabel,
+  errorMessage,
 }: {
   name?: string;
   label?: string;
@@ -225,6 +242,7 @@ export function NetDaysSelect({
   onChange?: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   required?: boolean;
   hideLabel?: boolean;
+  errorMessage?: string;
 }) {
   const parsed = Number(value ?? defaultValue);
   const selected = Number.isFinite(parsed) ? String(parsed) : "7";
@@ -237,6 +255,7 @@ export function NetDaysSelect({
       name={name}
       required={required}
       hideLabel={hideLabel}
+      errorMessage={errorMessage}
       {...(value !== undefined
         ? { value: selected, onChange }
         : { defaultValue: selected })}
@@ -266,6 +285,12 @@ export function TextInput({
   max,
   maxDecimals = 4,
   helperText,
+  errorMessage,
+  size = "small",
+  autoComplete,
+  placeholder,
+  startAdornment,
+  sanitize,
 }: {
   label: string;
   name: string;
@@ -284,10 +309,15 @@ export function TextInput({
   /** Max digits after the decimal for `kind="decimal"`. */
   maxDecimals?: number;
   helperText?: string;
+  errorMessage?: string;
+  size?: "small" | "medium";
+  autoComplete?: string;
+  placeholder?: string;
+  startAdornment?: React.ReactNode;
+  sanitize?: (value: string) => string;
 }) {
   const resolvedKind: TextInputKind =
     kind ?? (numeric === "int" ? "int" : numeric === "decimal" ? "decimal" : "text");
-  // Keep numeric kinds as text so we fully control allowed characters (type=number allows e/+/−).
   const resolvedType =
     resolvedKind === "int" ||
     resolvedKind === "decimal" ||
@@ -318,57 +348,67 @@ export function TextInput({
               ? 16
               : undefined);
 
+  const [value, setValue] = useState(String(defaultValue ?? ""));
+  const invalid = Boolean(errorMessage);
+
+  function apply(raw: string) {
+    let next = raw;
+    if (resolvedKind === "letters") next = sanitizeLetters(next);
+    else if (resolvedKind === "int") next = sanitizeInt(next);
+    else if (resolvedKind === "decimal") next = sanitizeDecimal(next, maxDecimals);
+    else if (resolvedKind === "phone") next = digitsOnlyPhone(next);
+    if (resolvedKind === "currency") next = sanitizeCurrency(next);
+    if (sanitize) next = sanitize(next);
+    if (defaultMaxLength != null && next.length > defaultMaxLength) {
+      next = next.slice(0, defaultMaxLength);
+    }
+    setValue(next);
+  }
+
   return (
     <TextField
-      size="small"
+      size={size}
       fullWidth
       label={hideLabel ? undefined : label}
       name={name}
       type={resolvedType}
-      defaultValue={defaultValue ?? ""}
+      value={value}
+      onChange={(event) => apply(event.target.value)}
+      onBlur={
+        resolvedKind === "int" || resolvedKind === "decimal"
+          ? () => {
+              if (!value) return;
+              setValue(clampNumberString(value, min, max));
+            }
+          : undefined
+      }
       required={required}
       multiline={multiline}
       minRows={multiline ? rows ?? 3 : undefined}
-      helperText={helperText}
+      placeholder={placeholder}
+      error={invalid}
+      helperText={errorMessage || helperText}
       slotProps={{
+        input: startAdornment ? { startAdornment } : undefined,
         inputLabel:
-          !hideLabel && (resolvedType === "date" || multiline || helperText)
+          !hideLabel && (resolvedType === "date" || multiline || helperText || invalid)
             ? { shrink: true }
             : undefined,
         htmlInput: {
           "aria-label": label,
+          "aria-invalid": invalid || undefined,
           inputMode,
           maxLength: defaultMaxLength,
           min: min != null ? String(min) : undefined,
           max: max != null ? String(max) : undefined,
           ...(resolvedType === "date" ? { min: "1990-01-01", max: "2100-12-31" } : {}),
           autoComplete:
-            resolvedKind === "phone"
+            autoComplete ??
+            (resolvedKind === "phone"
               ? "tel-national"
               : resolvedKind === "letters"
                 ? "name"
-                : undefined,
-          onInput: (event: React.FormEvent<HTMLInputElement>) => {
-            const el = event.currentTarget;
-            let next = el.value;
-            if (resolvedKind === "letters") next = sanitizeLetters(next);
-            else if (resolvedKind === "int") next = sanitizeInt(next);
-            else if (resolvedKind === "decimal") next = sanitizeDecimal(next, maxDecimals);
-            else if (resolvedKind === "phone") next = digitsOnlyPhone(next);
-            else if (resolvedKind === "currency") next = sanitizeCurrency(next);
-            if (defaultMaxLength != null && next.length > defaultMaxLength) {
-              next = next.slice(0, defaultMaxLength);
-            }
-            el.value = next;
-          },
-          onBlur:
-            resolvedKind === "int" || resolvedKind === "decimal"
-              ? (event: React.FocusEvent<HTMLInputElement>) => {
-                  const el = event.currentTarget;
-                  if (!el.value) return;
-                  el.value = clampNumberString(el.value, min, max);
-                }
-              : undefined,
+                : undefined),
         },
       }}
     />

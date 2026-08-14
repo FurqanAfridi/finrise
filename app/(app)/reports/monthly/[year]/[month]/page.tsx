@@ -50,7 +50,7 @@ export default async function MonthlyOverviewPage({
     <Box>
       <PageHeader
         title={`${monthName(month)} ${year}`}
-        description="How this month looks so far — cash in, cash out, and what’s left."
+        description="How this month looks so far: cash in, cash out, and what’s left."
       >
         <Link href="/reports">
           <Button variant="outlined" color="primary">

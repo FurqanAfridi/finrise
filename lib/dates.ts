@@ -6,9 +6,9 @@ export function isoDate(value?: Date | string | null) {
 }
 
 export function displayDate(value?: Date | string | null) {
-  if (!value) return "—";
+  if (!value) return "None";
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "None";
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",

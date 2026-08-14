@@ -58,7 +58,7 @@ export default async function DashboardPage() {
       <Box>
         <PageHeader
           title="Dashboard"
-          description="Your invoices with this company — only your account."
+          description="Your invoices with this company. This view is only your account."
           actionHref="/buyers"
           actionLabel="View invoices"
         />
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
       <Box>
         <PageHeader
           title="Dashboard"
-          description="Your payables with this company — only your account."
+          description="Your payables with this company. This view is only your account."
           actionHref="/publishers"
           actionLabel="My invoices"
         />

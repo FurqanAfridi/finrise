@@ -22,12 +22,13 @@ import { num } from "@/lib/utils";
 import { INVITE_FROM_EMAIL, platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
 import { canWrite, isPublisherPortal, requireTenant, requireTenantAdmin } from "@/lib/tenant";
 import { formField, parseEmail } from "@/lib/validation";
+import { invalid, type FormActionState } from "@/lib/form-state";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 
 export async function saveSmtpMailboxAction(
-  _prev: { error?: string; ok?: boolean },
+  _prev: FormActionState,
   formData: FormData,
-): Promise<{ error?: string; ok?: boolean }> {
+): Promise<FormActionState> {
   const ctx = await requireTenantAdmin();
   const result = await saveSmtpMailbox(ctx.tenantId, {
     id: formField(formData, "id") || undefined,
@@ -41,7 +42,9 @@ export async function saveSmtpMailboxAction(
     fromName: formField(formData, "fromName"),
     makeDefault: formField(formData, "makeDefault") === "true",
   });
-  if ("error" in result) return { error: result.error };
+  if ("error" in result) {
+    return result.field ? invalid(result.field, result.error) : { error: result.error };
+  }
   revalidatePath("/settings");
   return { ok: true };
 }

@@ -10,6 +10,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { TextInput } from "@/components/forms";
 import { SettingsRow, SettingsSection } from "@/components/settings/settings-ui";
 import { AVATAR_TEMPLATES } from "@/lib/avatars";
+import type { FormActionState } from "@/lib/form-state";
 
 export function ProfileForm({
   name,
@@ -20,21 +21,21 @@ export function ProfileForm({
   email: string | null;
   avatarKey: string | null;
 }) {
-  const [state, action] = useActionState(updateProfileAction, {} as { error?: string; ok?: boolean });
+  const [state, action] = useActionState(updateProfileAction, {} as FormActionState);
 
   return (
     <Box component="form" action={action}>
       <SettingsSection
         title="Profile"
-        description="Your name and avatar appear in the app. Avatars are templates — pick one that feels like you."
+        description="Your name and avatar appear in the app. Avatars are templates; pick one that feels like you."
       >
         <SettingsRow label="Email" hint="Sign-in address. Contact an admin if you need to change it.">
           <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {email || "—"}
+            {email || "Not set"}
           </Typography>
         </SettingsRow>
         <SettingsRow label="Display name">
-          <TextInput label="Display name" name="name" defaultValue={name ?? ""} hideLabel kind="letters" maxLength={80} />
+          <TextInput label="Display name" name="name" defaultValue={name ?? ""} hideLabel kind="letters" maxLength={80} errorMessage={state.fieldErrors?.name} />
         </SettingsRow>
         <SettingsRow label="Avatar" hint="Choose a color template. Your initial sits on top." align="start">
           <Box
@@ -82,7 +83,7 @@ export function ProfileForm({
           </Box>
         </SettingsRow>
         <Box sx={{ px: 3, py: 2.5 }}>
-          {state.error ? (
+          {state.error && !state.fieldErrors ? (
             <Typography color="error" variant="body2" sx={{ mb: 1 }}>
               {state.error}
             </Typography>

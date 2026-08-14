@@ -55,7 +55,7 @@ export default async function PeriodReportPage({
     <Box>
       <PageHeader
         title={bounds.label}
-        description={`${grainLabel(grain)} report — cash in, cash out, and what’s left.`}
+        description={`${grainLabel(grain)} report: cash in, cash out, and what’s left.`}
       >
         <Link href="/reports">
           <Button variant="outlined" color="primary">

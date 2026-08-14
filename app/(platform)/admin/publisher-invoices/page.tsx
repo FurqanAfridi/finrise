@@ -78,7 +78,7 @@ export default async function PlatformPublisherInvoicesPage({
             <TableRow key={row.id} hover>
               <TableCell>{row.tenant.name}</TableCell>
               <TableCell>{row.publisher.name}</TableCell>
-              <TableCell>{row.invoiceNumber || row.periodLabel || "—"}</TableCell>
+              <TableCell>{row.invoiceNumber || row.periodLabel || "None"}</TableCell>
               <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>
                 {formatMoney(num(row.payable))}
               </TableCell>

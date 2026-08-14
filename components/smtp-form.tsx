@@ -26,7 +26,8 @@ function MailboxForm({
   mailbox?: SmtpMailboxPublic | null;
   onCancel: () => void;
 }) {
-  const [state, action] = useActionState(saveSmtpMailboxAction, {} as { error?: string; ok?: boolean });
+  const [state, action] = useActionState(saveSmtpMailboxAction, {} as { error?: string; ok?: boolean; fieldErrors?: Record<string, string> });
+  const errors = state.fieldErrors ?? {};
 
   return (
     <Box
@@ -43,14 +44,14 @@ function MailboxForm({
     >
       {mailbox ? <input type="hidden" name="id" value={mailbox.id} /> : null}
       <SettingsRow label="Label" hint="Short name so you can pick this mailbox when emailing invoices.">
-        <TextInput label="Label" name="label" defaultValue={mailbox?.label ?? ""} required hideLabel maxLength={60} />
+        <TextInput label="Label" name="label" defaultValue={mailbox?.label ?? ""} required hideLabel maxLength={60} errorMessage={errors.label} />
       </SettingsRow>
       <SettingsRow label="SMTP host" hint="For example smtp.gmail.com or smtp.office365.com.">
-        <TextInput label="SMTP host" name="host" defaultValue={mailbox?.host ?? ""} required hideLabel maxLength={253} />
+        <TextInput label="SMTP host" name="host" defaultValue={mailbox?.host ?? ""} required hideLabel maxLength={253} errorMessage={errors.host} />
       </SettingsRow>
       <SettingsRow label="Port" hint="587 for STARTTLS, or 465 for TLS.">
         <Box sx={{ maxWidth: 160, width: "100%" }}>
-          <TextInput label="Port" name="port" defaultValue={mailbox?.port ?? 587} required kind="int" min={1} max={65535} hideLabel />
+          <TextInput label="Port" name="port" defaultValue={mailbox?.port ?? 587} required kind="int" min={1} max={65535} hideLabel errorMessage={errors.port} />
         </Box>
       </SettingsRow>
       <SettingsRow label="Connection">
@@ -60,7 +61,7 @@ function MailboxForm({
         </NativeSelect>
       </SettingsRow>
       <SettingsRow label="Username" hint="Usually the full email address.">
-        <TextInput label="Username" name="username" defaultValue={mailbox?.username ?? ""} required hideLabel maxLength={254} />
+        <TextInput label="Username" name="username" defaultValue={mailbox?.username ?? ""} required hideLabel maxLength={254} errorMessage={errors.username} />
       </SettingsRow>
       <SettingsRow
         label="Password"
@@ -73,6 +74,7 @@ function MailboxForm({
           required={!mailbox?.hasPassword}
           hideLabel
           maxLength={128}
+          errorMessage={errors.password}
         />
       </SettingsRow>
       <SettingsRow label="From email" hint="The address buyers see as the sender.">
@@ -84,6 +86,7 @@ function MailboxForm({
           required
           hideLabel
           maxLength={254}
+          errorMessage={errors.fromEmail}
         />
       </SettingsRow>
       <SettingsRow label="From name" hint="Optional display name, such as your company name.">
@@ -100,7 +103,7 @@ function MailboxForm({
         <input type="hidden" name="makeDefault" value="true" />
       )}
       <Box sx={{ px: 3, py: 2, display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-        {state.error ? (
+        {state.error && !state.fieldErrors ? (
           <Typography color="error" variant="body2" sx={{ width: "100%" }}>
             {state.error}
           </Typography>

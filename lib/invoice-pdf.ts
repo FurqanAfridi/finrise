@@ -64,8 +64,9 @@ export async function buildInvoicePdf(
     doc.fillColor("#111827").fontSize(16).text(branding.legalName, 50, 50, { width: 280 });
     doc.font("Helvetica").fontSize(9).fillColor("#4b5563");
     const companyLines = [
+      branding.invoiceRepresentativeName,
       [branding.address, branding.zipCode, branding.countryLabel].filter(Boolean).join(", "),
-      [branding.email, branding.phone, branding.website].filter(Boolean).join(" · "),
+      [branding.contactEmail, branding.contactPhone, branding.website].filter(Boolean).join(" · "),
       branding.taxId ? `Tax ID: ${branding.taxId}` : null,
     ].filter(Boolean) as string[];
     for (const line of companyLines) doc.text(line, { width: 280 });
@@ -119,8 +120,8 @@ export async function buildInvoicePdf(
       doc.font("Helvetica").fontSize(8).fillColor("#6b7280").text(sub, 58, y + 14, { width: 250 });
     }
     doc.fillColor("#111827").font("Helvetica").fontSize(10);
-    doc.text(qty == null ? "—" : qty.toLocaleString(), 320, y, { width: 50, align: "right" });
-    doc.text(rate == null ? "—" : formatMoney(rate, currency), 380, y, { width: 70, align: "right" });
+    doc.text(qty == null ? "n/a" : qty.toLocaleString(), 320, y, { width: 50, align: "right" });
+    doc.text(rate == null ? "n/a" : formatMoney(rate, currency), 380, y, { width: 70, align: "right" });
     doc.font("Helvetica-Bold").text(formatMoney(amount, currency), 460, y, { width: 75, align: "right" });
 
     y += 48;

@@ -15,6 +15,7 @@ import { platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
 import { Role } from "@/lib/roles";
 import { TENANT_COOKIE } from "@/lib/tenant";
 import { formField, parseCompanyIdentity, parseEmail, parsePassword, parsePersonName } from "@/lib/validation";
+import { identityInvalid, invalid, invalidResult, type FormActionState } from "@/lib/form-state";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "")
@@ -53,15 +54,18 @@ export async function loginAction(formData: FormData) {
   }
 }
 
-export async function signupAction(_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> {
+export async function signupAction(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const firstName = parsePersonName(formField(formData, "firstName"), "First name");
-  if (!firstName.ok) return { error: firstName.error };
+  if (!firstName.ok) return invalid("firstName", firstName.error);
   const lastName = parsePersonName(formField(formData, "lastName"), "Last name");
-  if (!lastName.ok) return { error: lastName.error };
+  if (!lastName.ok) return invalid("lastName", lastName.error);
   const email = parseEmail(formField(formData, "email"), true);
-  if (!email.ok) return { error: email.error };
+  if (!email.ok) return invalid("email", email.error);
   const password = parsePassword(String(formData.get("password") ?? ""), String(formData.get("confirmPassword") ?? ""));
-  if (!password.ok) return { error: password.error };
+  if (!password.ok) {
+    const field = password.error.includes("match") ? "confirmPassword" : "password";
+    return invalid(field, password.error);
+  }
 
   const identity = parseCompanyIdentity({
     name: formField(formData, "companyName"),
@@ -76,15 +80,16 @@ export async function signupAction(_prev: { error?: string }, formData: FormData
     bankIban: formField(formData, "bankIban"),
     bankSwift: formField(formData, "bankSwift"),
   });
-  if (!identity.ok) return { error: identity.error };
+  if (!identity.ok) return identityInvalid(identity, "companyName");
 
   if (await findExistingCompany(identity.value.name)) {
-    return {
-      error: "A company with this name already exists. Sign in and ask an admin for an invite, or choose a different name.",
-    };
+    return invalid(
+      "companyName",
+      "A company with this name already exists. Sign in and ask an admin for an invite, or choose a different name.",
+    );
   }
   if (await prisma.user.findUnique({ where: { email: email.value as string } })) {
-    return { error: "An account with this email already exists. Sign in instead." };
+    return invalid("email", "An account with this email already exists. Sign in instead.");
   }
 
   const fullName = `${firstName.value} ${lastName.value}`;
@@ -137,11 +142,11 @@ export async function logoutAction() {
 }
 
 export async function requestPasswordResetAction(
-  _prev: { error?: string; ok?: boolean },
+  _prev: FormActionState,
   formData: FormData,
-): Promise<{ error?: string; ok?: boolean }> {
+): Promise<FormActionState> {
   const email = parseEmail(formField(formData, "email"), true);
-  if (!email.ok || !email.value) return { error: email.ok ? "Enter the email for your account." : email.error };
+  if (!email.ok || !email.value) return invalid("email", email.ok ? "Enter the email for your account." : email.error);
 
   const user = await prisma.user.findUnique({ where: { email: email.value } });
   if (user) {
@@ -180,13 +185,16 @@ export async function requestPasswordResetAction(
 }
 
 export async function completePasswordResetAction(
-  _prev: { error?: string; ok?: boolean },
+  _prev: FormActionState,
   formData: FormData,
-): Promise<{ error?: string; ok?: boolean }> {
+): Promise<FormActionState> {
   const token = formField(formData, "token");
   const password = parsePassword(String(formData.get("password") ?? ""), String(formData.get("confirmPassword") ?? ""));
   if (!token) return { error: "This reset link is missing. Request a new one from the sign-in page." };
-  if (!password.ok) return { error: password.error };
+  if (!password.ok) {
+    const field = password.error.includes("match") ? "confirmPassword" : "password";
+    return invalid(field, password.error);
+  }
 
   const row = await prisma.passwordReset.findUnique({ where: { token } });
   if (!row || row.usedAt || row.expiresAt < new Date()) {

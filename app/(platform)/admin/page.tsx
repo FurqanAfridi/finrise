@@ -59,14 +59,14 @@ export default async function PlatformAdminHome() {
     <>
       <PageHeader
         title="Platform overview"
-        description="Manage every company, user, and invoice across Fundlookup. Invite-only — no public signup on this admin site."
+        description="Manage every company, user, and invoice across Fundlookup. Invite-only, with no public signup on this admin site."
       />
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 3 }}>
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography variant="caption" color="text.secondary">
-              Open receivables — money buyers still owe
+              Open receivables: money buyers still owe
             </Typography>
             <Typography variant="h4" sx={{ fontVariantNumeric: "tabular-nums", mt: 0.5 }}>
               {formatMoney(num(openBuyer._sum.receivable) - num(openBuyer._sum.received))}
@@ -76,7 +76,7 @@ export default async function PlatformAdminHome() {
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography variant="caption" color="text.secondary">
-              Open payables — money still owed to publishers
+              Open payables: money still owed to publishers
             </Typography>
             <Typography variant="h4" sx={{ fontVariantNumeric: "tabular-nums", mt: 0.5 }}>
               {formatMoney(num(openPub._sum.payable) - num(openPub._sum.paid))}

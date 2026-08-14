@@ -60,6 +60,8 @@ export function invoiceEmailContent(
   const text = [
     `Invoice ${number}`,
     branding.legalName,
+    branding.invoiceRepresentativeName,
+    [branding.contactEmail, branding.contactPhone].filter(Boolean).join(" · ") || null,
     "",
     `Bill to: ${invoice.buyerName}`,
     invoice.buyerContact ? `Contact: ${invoice.buyerContact}` : null,
@@ -85,6 +87,18 @@ export function invoiceEmailContent(
     <div style="font-family: Arial, sans-serif; color: #111827; max-width: 640px; margin: 0 auto;">
       <p style="color: ${accent}; font-weight: 800; letter-spacing: 2px; margin-bottom: 8px;">INVOICE</p>
       <h1 style="margin: 0 0 4px; font-size: 22px;">${escapeHtml(branding.legalName)}</h1>
+      ${
+        branding.invoiceRepresentativeName
+          ? `<p style="color: #4b5563; margin: 0 0 4px;">${escapeHtml(branding.invoiceRepresentativeName)}</p>`
+          : ""
+      }
+      ${
+        branding.contactEmail || branding.contactPhone
+          ? `<p style="color: #4b5563; margin: 0 0 8px;">${escapeHtml(
+              [branding.contactEmail, branding.contactPhone].filter(Boolean).join(" · "),
+            )}</p>`
+          : ""
+      }
       <p style="color: #4b5563; margin: 0 0 24px;">${escapeHtml(number)}</p>
       <p><strong>Bill to</strong><br/>${escapeHtml(invoice.buyerName)}${
         invoice.buyerContact ? `<br/>${escapeHtml(invoice.buyerContact)}` : ""

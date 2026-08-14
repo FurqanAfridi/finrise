@@ -22,6 +22,13 @@ export type CompanyBranding = {
   invoiceColor: string;
   termsAndConditions: string | null;
   defaultNetDays: number;
+  invoiceEmail: string | null;
+  invoicePhone: string | null;
+  invoiceRepresentativeName: string | null;
+  /** Email printed on invoices (invoice contact, else company email). */
+  contactEmail: string | null;
+  /** Phone printed on invoices (invoice contact, else company phone). */
+  contactPhone: string | null;
   logoSrc: string | null;
   hasLogo: boolean;
   hasBank: boolean;
@@ -48,6 +55,9 @@ type ProfileRow = {
   invoiceColor: string | null;
   termsAndConditions: string | null;
   defaultNetDays: number | null;
+  invoiceEmail: string | null;
+  invoicePhone: string | null;
+  invoiceRepresentativeName: string | null;
   logoMime: string | null;
   logoData: Uint8Array | Buffer | null;
 };
@@ -95,6 +105,9 @@ export async function getCompanyBranding(tenantId: string, tenantName: string): 
         "invoiceColor",
         "termsAndConditions",
         "defaultNetDays",
+        "invoiceEmail",
+        "invoicePhone",
+        "invoiceRepresentativeName",
         "logoMime",
         "logoData"
       FROM "CompanyProfile"
@@ -130,6 +143,11 @@ export async function getCompanyBranding(tenantId: string, tenantName: string): 
     invoiceColor,
     termsAndConditions: profile?.termsAndConditions ?? null,
     defaultNetDays: profile?.defaultNetDays ?? 7,
+    invoiceEmail: profile?.invoiceEmail ?? null,
+    invoicePhone: profile?.invoicePhone ?? null,
+    invoiceRepresentativeName: profile?.invoiceRepresentativeName ?? null,
+    contactEmail: profile?.invoiceEmail || profile?.email || null,
+    contactPhone: profile?.invoicePhone || profile?.phone || null,
     logoSrc: toDataUrl(profile?.logoMime ?? null, profile?.logoData ?? null),
     hasLogo: Boolean(profile?.logoData && profile.logoData.length > 0),
     hasBank: Boolean(bankName && (bankAccountNumber || bankIban)),

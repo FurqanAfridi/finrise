@@ -59,7 +59,7 @@ export default async function PayoutsPage() {
                 <TableRow key={row.id} hover>
                   <TableCell>{row.invoiceNumber || row.periodLabel || "Payable"}</TableCell>
                   <TableCell>{displayDate(row.paidAt)}</TableCell>
-                  <TableCell>{row.paymentMethod || "—"}</TableCell>
+                  <TableCell>{row.paymentMethod || "None"}</TableCell>
                   <TableCell align="right" className="fr-money">
                     {formatMoney(num(row.paid ?? row.payable))}
                   </TableCell>

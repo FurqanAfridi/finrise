@@ -11,7 +11,7 @@ import { CompanyBankCompleteForm, CompanyExtrasForm, FinanceSettingsForm } from 
 import { InviteForm } from "@/components/invite-form";
 import { PageHeader } from "@/components/page-header";
 import { CompaniesPanel } from "@/components/settings/companies-panel";
-import { ImportCsvWizard } from "@/components/settings/import-csv-wizard";
+import { HistoricalImportWizard } from "@/components/integrations/historical-import-wizard";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { SettingsHashRedirect } from "@/components/settings/hash-redirect";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@/components/settings/settings-ui";
 import { SmtpSettingsForm } from "@/components/smtp-form";
 import { getCompanyBranding } from "@/lib/company-branding";
+import { getGoogleSheetsConnection } from "@/lib/google-sheets";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { prisma } from "@/lib/prisma";
 import { getSetting } from "@/lib/queries";
@@ -86,7 +87,7 @@ export default async function SettingsPage({
     );
   }
 
-  const [currency, lastImportAt, users, invites, finance, branding, mailboxes, emailLogs] = await Promise.all([
+  const [currency, lastImportAt, users, invites, finance, branding, mailboxes, emailLogs, googleSheets] = await Promise.all([
     getSetting(ctx.tenantId, "currency", "USD"),
     getSetting(ctx.tenantId, "lastImportAt"),
     prisma.tenantMembership.findMany({
@@ -99,6 +100,7 @@ export default async function SettingsPage({
     getCompanyBranding(ctx.tenantId, ctx.tenantName),
     listSmtpMailboxes(ctx.tenantId),
     listInvoiceEmailLogs(ctx.tenantId),
+    getGoogleSheetsConnection(ctx.tenantId),
   ]);
 
   return (
@@ -119,20 +121,20 @@ export default async function SettingsPage({
             <SettingsRow label="Company name" hint="Legal name buyers see on invoices." action={<LockedChip />}>
               <SettingsValue>{branding.legalName}</SettingsValue>
             </SettingsRow>
-            <SettingsRow label="Email" hint="Company contact email printed on invoices." action={<LockedChip />}>
-              <SettingsValue>{branding.email || "—"}</SettingsValue>
+            <SettingsRow label="Email" hint="Locked company email. Set a different invoice email under Branding." action={<LockedChip />}>
+              <SettingsValue>{branding.email || "Not set"}</SettingsValue>
             </SettingsRow>
-            <SettingsRow label="Phone" action={<LockedChip />}>
-              <SettingsValue>{branding.phone || "—"}</SettingsValue>
+            <SettingsRow label="Phone" hint="Locked company phone. Set a different invoice phone under Branding." action={<LockedChip />}>
+              <SettingsValue>{branding.phone || "Not set"}</SettingsValue>
             </SettingsRow>
             <SettingsRow label="Country" action={<LockedChip />}>
-              <SettingsValue>{branding.countryLabel || "—"}</SettingsValue>
+              <SettingsValue>{branding.countryLabel || "Not set"}</SettingsValue>
             </SettingsRow>
             <SettingsRow label="Address" align="start" action={<LockedChip />}>
-              <SettingsValue>{branding.address || "—"}</SettingsValue>
+              <SettingsValue>{branding.address || "Not set"}</SettingsValue>
             </SettingsRow>
             <SettingsRow label="Zip code" action={<LockedChip />}>
-              <SettingsValue>{branding.zipCode || "—"}</SettingsValue>
+              <SettingsValue>{branding.zipCode || "Not set"}</SettingsValue>
             </SettingsRow>
           </SettingsSection>
 
@@ -192,6 +194,11 @@ export default async function SettingsPage({
           termsAndConditions={branding.termsAndConditions}
           logoSrc={branding.logoSrc}
           hasLogo={branding.hasLogo}
+          invoiceEmail={branding.invoiceEmail}
+          invoicePhone={branding.invoicePhone}
+          invoiceRepresentativeName={branding.invoiceRepresentativeName}
+          companyEmail={branding.email}
+          companyPhone={branding.phone}
         />
       ) : null}
 
@@ -312,7 +319,7 @@ export default async function SettingsPage({
         </>
       ) : null}
 
-      {tab === "import" ? <ImportCsvWizard /> : null}
+      {tab === "import" ? <HistoricalImportWizard googleConnected={Boolean(googleSheets)} /> : null}
     </Box>
   );
 }

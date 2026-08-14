@@ -57,6 +57,11 @@ export function CompanyExtrasForm({
   termsAndConditions,
   logoSrc,
   hasLogo,
+  invoiceEmail,
+  invoicePhone,
+  invoiceRepresentativeName,
+  companyEmail,
+  companyPhone,
 }: {
   website?: string | null;
   taxId?: string | null;
@@ -66,8 +71,14 @@ export function CompanyExtrasForm({
   termsAndConditions?: string | null;
   logoSrc?: string | null;
   hasLogo: boolean;
+  invoiceEmail?: string | null;
+  invoicePhone?: string | null;
+  invoiceRepresentativeName?: string | null;
+  companyEmail?: string | null;
+  companyPhone?: string | null;
 }) {
   const [state, action] = useActionState(saveCompanyProfile, {});
+  const errors = state.fieldErrors ?? {};
 
   return (
     <Box component="form" action={action}>
@@ -101,10 +112,57 @@ export function CompanyExtrasForm({
           <InvoiceColorField defaultValue={invoiceColor || DEFAULT_INVOICE_COLOR} />
         </SettingsRow>
         <SettingsRow label="Website" hint="Optional. Shown under your company name.">
-          <TextInput label="Website" name="website" defaultValue={website ?? ""} hideLabel />
+          <TextInput label="Website" name="website" defaultValue={website ?? ""} hideLabel errorMessage={errors.website} />
         </SettingsRow>
         <SettingsRow label="Tax ID" hint="Optional. Printed on the invoice if you add one.">
-          <TextInput label="Tax ID" name="taxId" defaultValue={taxId ?? ""} hideLabel />
+          <TextInput label="Tax ID" name="taxId" defaultValue={taxId ?? ""} hideLabel errorMessage={errors.taxId} />
+        </SettingsRow>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Invoice contact"
+        description="These print on invoices. They can differ from the locked company email and phone. Leave a field blank to use the company detail instead."
+      >
+        <SettingsRow
+          label="Representative name"
+          hint="The person buyers should contact about this invoice."
+        >
+          <TextInput
+            label="Company representative name"
+            name="invoiceRepresentativeName"
+            kind="letters"
+            defaultValue={invoiceRepresentativeName ?? ""}
+            hideLabel
+            maxLength={80}
+            errorMessage={errors.invoiceRepresentativeName}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Invoice email"
+          hint={companyEmail ? `Company email is ${companyEmail}.` : "Shown on the invoice and in invoice emails."}
+        >
+          <TextInput
+            label="Invoice email"
+            name="invoiceEmail"
+            type="email"
+            defaultValue={invoiceEmail ?? ""}
+            hideLabel
+            maxLength={254}
+            errorMessage={errors.invoiceEmail}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Invoice phone"
+          hint={companyPhone ? `Company phone is ${companyPhone}.` : "Shown on the invoice under your company name."}
+        >
+          <TextInput
+            label="Invoice phone"
+            name="invoicePhone"
+            kind="phone"
+            defaultValue={invoicePhone ?? ""}
+            hideLabel
+            errorMessage={errors.invoicePhone}
+          />
         </SettingsRow>
       </SettingsSection>
 
@@ -120,6 +178,7 @@ export function CompanyExtrasForm({
               defaultValue={defaultNetDays ?? 7}
               required
               hideLabel
+              errorMessage={errors.defaultNetDays}
             />
           </Box>
         </SettingsRow>
@@ -128,14 +187,14 @@ export function CompanyExtrasForm({
           hint="Attached at the bottom of every invoice and included in the email."
           align="start"
         >
-          <TextInput label="Terms and conditions" name="termsAndConditions" multiline rows={6} defaultValue={termsAndConditions ?? ""} hideLabel maxLength={8000} />
+          <TextInput label="Terms and conditions" name="termsAndConditions" multiline rows={6} defaultValue={termsAndConditions ?? ""} hideLabel maxLength={8000} errorMessage={errors.termsAndConditions} />
         </SettingsRow>
         <SettingsRow label="Payment notes" hint="Short note under the bank details, such as a payment reference." align="start">
           <TextInput label="Payment notes" name="paymentNotes" multiline defaultValue={paymentNotes ?? ""} hideLabel maxLength={500} />
         </SettingsRow>
       </SettingsSection>
 
-      {state.error ? (
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2" sx={{ mb: 2 }}>
           {state.error}
         </Typography>
@@ -161,8 +220,8 @@ export function CompanyBankCompleteForm({
       <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
         Add the account buyers should pay. It is printed on invoices and cannot be changed later.
       </Typography>
-      <BankFields country={country} defaults={defaults} size="small" />
-      {state.error ? (
+      <BankFields country={country} defaults={defaults} size="small" fieldErrors={state.fieldErrors} />
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2">
           {state.error}
         </Typography>
@@ -192,6 +251,7 @@ export function FinanceSettingsForm({
   lastImportAt?: string | null;
 }) {
   const [state, action] = useActionState(saveSettings, {});
+  const errors = state.fieldErrors ?? {};
 
   return (
     <Box component="form" action={action}>
@@ -201,7 +261,7 @@ export function FinanceSettingsForm({
       >
         <SettingsRow label="Currency" hint="Three-letter code used on invoices, for example USD.">
           <Box sx={{ maxWidth: 160, width: "100%" }}>
-            <TextInput label="Currency" name="currency" defaultValue={currency} required kind="currency" hideLabel />
+            <TextInput label="Currency" name="currency" defaultValue={currency} required kind="currency" hideLabel errorMessage={errors.currency} />
           </Box>
         </SettingsRow>
         <SettingsRow label="Tax rate" hint="Percent of profit set aside for tax before partner payouts.">
@@ -216,6 +276,7 @@ export function FinanceSettingsForm({
               min={0}
               max={100}
               hideLabel
+              errorMessage={errors.taxRatePercent}
             />
           </Box>
         </SettingsRow>
@@ -239,6 +300,7 @@ export function FinanceSettingsForm({
               maxDecimals={2}
               min={0}
               hideLabel
+              errorMessage={errors.varianceToleranceAmount}
             />
           </Box>
         </SettingsRow>
@@ -250,6 +312,7 @@ export function FinanceSettingsForm({
               defaultValue={fiscalMonthStartDay}
               required
               hideLabel
+              errorMessage={errors.fiscalMonthStartDay}
             />
           </Box>
         </SettingsRow>
@@ -259,7 +322,7 @@ export function FinanceSettingsForm({
           </Typography>
         </SettingsRow>
       </SettingsSection>
-      {state.error ? (
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2" sx={{ mb: 2 }}>
           {state.error}
         </Typography>

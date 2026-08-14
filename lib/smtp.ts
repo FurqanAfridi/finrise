@@ -84,13 +84,15 @@ export async function saveSmtpMailbox(
 ) {
   const label = input.label.trim() || "Mailbox";
   const host = input.host.trim();
-  if (!host) return { error: "SMTP host is required." } as const;
+  if (!host) return { error: "SMTP host is required.", field: "host" } as const;
   const port = parseInteger(input.port || "587", "SMTP port", 1, 65535, true);
-  if (!port.ok || port.value == null) return { error: port.ok ? "SMTP port is required." : port.error } as const;
+  if (!port.ok || port.value == null) return { error: port.ok ? "SMTP port is required." : port.error, field: "port" } as const;
   const username = input.username.trim();
-  if (!username) return { error: "SMTP username is required." } as const;
+  if (!username) return { error: "SMTP username is required.", field: "username" } as const;
   const fromEmail = parseEmail(input.fromEmail, true);
-  if (!fromEmail.ok || !fromEmail.value) return { error: fromEmail.ok ? "From email is required." : fromEmail.error } as const;
+  if (!fromEmail.ok || !fromEmail.value) {
+    return { error: fromEmail.ok ? "From email is required." : fromEmail.error, field: "fromEmail" } as const;
+  }
 
   const existingId = input.id?.trim() || null;
   let passwordEnc: string | null = null;
@@ -101,12 +103,12 @@ export async function saveSmtpMailbox(
     if (!existing[0]) return { error: "Mailbox not found." } as const;
     const password = input.password.trim();
     if (!password && !existing[0].passwordEnc) {
-      return { error: "SMTP password is required." } as const;
+      return { error: "SMTP password is required.", field: "password" } as const;
     }
     passwordEnc = password ? encryptSecret(password) : existing[0].passwordEnc;
   } else {
     const password = input.password.trim();
-    if (!password) return { error: "SMTP password is required." } as const;
+    if (!password) return { error: "SMTP password is required.", field: "password" } as const;
     passwordEnc = encryptSecret(password);
   }
 

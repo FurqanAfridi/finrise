@@ -124,7 +124,7 @@ export default async function PlatformExpensesPage({
                 {row.year}-{String(row.month).padStart(2, "0")}
               </TableCell>
               <TableCell>{row.category}</TableCell>
-              <TableCell>{row.label ?? "—"}</TableCell>
+              <TableCell>{row.label ?? "None"}</TableCell>
               <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>
                 {formatMoney(num(row.actual))}
               </TableCell>

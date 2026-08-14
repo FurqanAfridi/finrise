@@ -114,8 +114,8 @@ export default async function PlatformBuyersPage({
             <TableRow key={row.id} hover>
               <TableCell>{row.tenant.name}</TableCell>
               <TableCell>{row.name}</TableCell>
-              <TableCell>{row.email ?? "—"}</TableCell>
-              <TableCell>{row.contactName ?? "—"}</TableCell>
+              <TableCell>{row.email ?? "None"}</TableCell>
+              <TableCell>{row.contactName ?? "None"}</TableCell>
               <TableCell align="right">
                 <Button href={`/admin/buyers?edit=${row.id}${tenantId ? `&tenant=${tenantId}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}`} size="small">
                   Edit

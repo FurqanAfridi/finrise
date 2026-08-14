@@ -26,6 +26,8 @@ import {
   parseHexColor,
   parseInteger,
   parseMoney,
+  parseOptionalPersonName,
+  parseOptionalPhone,
   parsePassword,
   parsePercent,
   parsePersonName,
@@ -34,6 +36,7 @@ import {
   parseTermsAndConditions,
   parseWebsite,
 } from "@/lib/validation";
+import { identityInvalid, invalid, invalidResult, type FormActionState } from "@/lib/form-state";
 
 function str(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -395,30 +398,33 @@ export async function deletePayout(formData: FormData) {
 }
 
 export async function upsertDirectory(
-  _prev: { error?: string; ok?: boolean },
+  _prev: FormActionState,
   formData: FormData,
-): Promise<{ error?: string; ok?: boolean }> {
+): Promise<FormActionState> {
   const ctx = await requireBrokerOps();
   const kind = str(formData, "kind");
   const name = parseCompanyName(formField(formData, "name"));
-  if (!kind || !name.ok) return { error: name.ok ? "Choose a contact type." : name.error };
+  if (!kind) return invalid("kind", "Choose a contact type.");
+  if (!name.ok) return invalid("name", name.error);
 
   if (kind === "buyer") {
     const email = parseEmail(formField(formData, "email"), true);
-    if (!email.ok || !email.value) return { error: email.ok ? "Email is required." : email.error };
+    if (!email.ok || !email.value) return invalid("email", email.ok ? "Email is required." : email.error);
     const contactName = parsePersonName(formField(formData, "contactName"), "Contact name");
-    if (!contactName.ok) return { error: contactName.error };
+    if (!contactName.ok) return invalid("contactName", contactName.error);
     const address = formField(formData, "address").trim();
-    if (address.length < 5) return { error: "Enter a full billing address." };
+    if (address.length < 5) return invalid("address", "Enter a full billing address.");
     const termsDays = parseInteger(formField(formData, "defaultPaymentTermsDays") || "7", "NET days", 0, 365, true);
-    if (!termsDays.ok || termsDays.value == null) return { error: termsDays.ok ? "NET days is required." : termsDays.error };
+    if (!termsDays.ok || termsDays.value == null) {
+      return invalid("defaultPaymentTermsDays", termsDays.ok ? "NET days is required." : termsDays.error);
+    }
     const defaultMethod = str(formData, "defaultMethod");
     const defaultTerms = str(formData, "defaultTerms");
     const dup = await prisma.buyer.findFirst({
       where: { tenantId: ctx.tenantId, name: name.value },
       select: { id: true },
     });
-    if (dup) return { error: "A buyer with that name already exists in this company." };
+    if (dup) return invalid("name", "A buyer with that name already exists in this company.");
     const id = `c${randomBytes(12).toString("hex")}`;
     await prisma.$executeRaw`
       INSERT INTO "Buyer" (
@@ -434,20 +440,22 @@ export async function upsertDirectory(
 
   if (kind === "publisher") {
     const email = parseEmail(formField(formData, "email"), true);
-    if (!email.ok || !email.value) return { error: email.ok ? "Email is required." : email.error };
+    if (!email.ok || !email.value) return invalid("email", email.ok ? "Email is required." : email.error);
     const contactName = parsePersonName(formField(formData, "contactName"), "Contact name");
-    if (!contactName.ok) return { error: contactName.error };
+    if (!contactName.ok) return invalid("contactName", contactName.error);
     const address = formField(formData, "address").trim();
-    if (address.length < 5) return { error: "Enter a full address." };
+    if (address.length < 5) return invalid("address", "Enter a full address.");
     const termsDays = parseInteger(formField(formData, "defaultPaymentTermsDays") || "7", "NET days", 0, 365, true);
-    if (!termsDays.ok || termsDays.value == null) return { error: termsDays.ok ? "NET days is required." : termsDays.error };
+    if (!termsDays.ok || termsDays.value == null) {
+      return invalid("defaultPaymentTermsDays", termsDays.ok ? "NET days is required." : termsDays.error);
+    }
     const isInternal = str(formData, "isInternal") === "true";
     const defaultTerms = str(formData, "defaultTerms");
     const dup = await prisma.publisher.findFirst({
       where: { tenantId: ctx.tenantId, name: name.value },
       select: { id: true },
     });
-    if (dup) return { error: "A publisher with that name already exists in this company." };
+    if (dup) return invalid("name", "A publisher with that name already exists in this company.");
     const id = `c${randomBytes(12).toString("hex")}`;
     // Raw insert: stale Next Prisma clients may not know Publisher.email/contactName/address yet.
     await prisma.$executeRaw`
@@ -466,7 +474,7 @@ export async function upsertDirectory(
     try {
       await prisma.vertical.create({ data: { tenantId: ctx.tenantId, name: name.value } });
     } catch {
-      return { error: "A vertical with that name already exists." };
+      return invalid("name", "A vertical with that name already exists.");
     }
   }
 
@@ -525,12 +533,12 @@ async function sendInviteEmail(input: {
 }
 
 export async function createInvite(
-  _prev: { error?: string; ok?: boolean; emailed?: boolean; inviteUrl?: string },
+  _prev: { error?: string; ok?: boolean; emailed?: boolean; inviteUrl?: string; fieldErrors?: Record<string, string> },
   formData: FormData,
-): Promise<{ error?: string; ok?: boolean; emailed?: boolean; inviteUrl?: string }> {
+): Promise<{ error?: string; ok?: boolean; emailed?: boolean; inviteUrl?: string; fieldErrors?: Record<string, string> }> {
   const ctx = await requireTenantAdmin();
   const email = parseEmail(formField(formData, "email"), true);
-  if (!email.ok || !email.value) return { error: email.ok ? "Email is required." : email.error };
+  if (!email.ok || !email.value) return invalid("email", email.ok ? "Email is required." : email.error);
   const tenantRole = (str(formData, "tenantRole") as TenantRole | null) ?? TenantRole.BROKER;
   if (tenantRole === TenantRole.BUYER || tenantRole === TenantRole.PUBLISHER) {
     return { error: "Invite buyers and publishers from Contacts, so they are linked to the right company record." };
@@ -676,17 +684,19 @@ export async function inviteContact(
   return result;
 }
 
-export async function saveSettings(_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> {
+export async function saveSettings(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const ctx = await requireTenantAdmin();
   const currency = parseCurrency(formField(formData, "currency") || "USD");
-  if (!currency.ok) return { error: currency.error };
+  if (!currency.ok) return invalid("currency", currency.error);
   const taxRate = parsePercent(formField(formData, "taxRatePercent"), "Tax rate");
-  if (!taxRate.ok) return { error: taxRate.error };
+  if (!taxRate.ok) return invalid("taxRatePercent", taxRate.error);
   const variance = parseMoney(formField(formData, "varianceToleranceAmount"), "Variance tolerance", true);
-  if (!variance.ok || variance.value == null) return { error: variance.ok ? "Variance tolerance is required." : variance.error };
+  if (!variance.ok || variance.value == null) {
+    return invalid("varianceToleranceAmount", variance.ok ? "Variance tolerance is required." : variance.error);
+  }
   const fiscalDay = parseInteger(formField(formData, "fiscalMonthStartDay"), "Fiscal month start day", 1, 28, true);
   if (!fiscalDay.ok || fiscalDay.value == null) {
-    return { error: fiscalDay.ok ? "Fiscal month start day is required." : fiscalDay.error };
+    return invalid("fiscalMonthStartDay", fiscalDay.ok ? "Fiscal month start day is required." : fiscalDay.error);
   }
 
   await prisma.setting.upsert({
@@ -711,23 +721,33 @@ export async function saveSettings(_prev: { error?: string }, formData: FormData
 const LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
-export async function saveCompanyProfile(_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> {
+export async function saveCompanyProfile(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const ctx = await requireTenantAdmin();
+  const branding = await getCompanyBranding(ctx.tenantId, ctx.tenantName);
   const logo = formData.get("logo");
   const removeLogo = str(formData, "removeLogo") === "true";
   const taxId = parseTaxId(formField(formData, "taxId"));
-  if (!taxId.ok) return { error: taxId.error };
+  if (!taxId.ok) return invalid("taxId", taxId.error);
   const website = parseWebsite(formField(formData, "website"));
-  if (!website.ok) return { error: website.error };
+  if (!website.ok) return invalid("website", website.error);
   const invoiceColor = parseHexColor(formField(formData, "invoiceColor"));
-  if (!invoiceColor.ok) return { error: invoiceColor.error };
+  if (!invoiceColor.ok) return invalid("invoiceColor", invoiceColor.error);
   const defaultNetDays = parseInteger(formField(formData, "defaultNetDays"), "Default NET days", 0, 365, true);
   if (!defaultNetDays.ok || defaultNetDays.value == null) {
-    return { error: defaultNetDays.ok ? "Default NET days is required." : defaultNetDays.error };
+    return invalid("defaultNetDays", defaultNetDays.ok ? "Default NET days is required." : defaultNetDays.error);
   }
   const termsAndConditions = parseTermsAndConditions(formField(formData, "termsAndConditions"));
-  if (!termsAndConditions.ok) return { error: termsAndConditions.error };
+  if (!termsAndConditions.ok) return invalid("termsAndConditions", termsAndConditions.error);
   const paymentNotes = str(formData, "paymentNotes");
+  const invoiceEmail = parseEmail(formField(formData, "invoiceEmail"), false);
+  if (!invoiceEmail.ok) return invalid("invoiceEmail", invoiceEmail.error);
+  const invoicePhone = parseOptionalPhone(formField(formData, "invoicePhone"), branding.country || "US");
+  if (!invoicePhone.ok) return invalid("invoicePhone", invoicePhone.error);
+  const invoiceRepresentativeName = parseOptionalPersonName(
+    formField(formData, "invoiceRepresentativeName"),
+    "Company representative name",
+  );
+  if (!invoiceRepresentativeName.ok) return invalid("invoiceRepresentativeName", invoiceRepresentativeName.error);
 
   let logoMime: string | null | undefined;
   let logoData: Uint8Array<ArrayBuffer> | null | undefined;
@@ -736,7 +756,7 @@ export async function saveCompanyProfile(_prev: { error?: string }, formData: Fo
     logoData = null;
   } else if (logo instanceof File && logo.size > 0) {
     if (!LOGO_TYPES.has(logo.type) || logo.size > LOGO_MAX_BYTES) {
-      return { error: "Logo must be PNG, JPG, WebP, GIF, or SVG up to 2 MB." };
+      return { error: "Logo must be PNG, JPG, WebP, GIF, or SVG up to 2 MB.", fieldErrors: { logo: "Logo must be PNG, JPG, WebP, GIF, or SVG up to 2 MB." } };
     }
     logoMime = logo.type;
     logoData = new Uint8Array(await logo.arrayBuffer());
@@ -746,11 +766,14 @@ export async function saveCompanyProfile(_prev: { error?: string }, formData: Fo
     await prisma.$executeRaw`
       INSERT INTO "CompanyProfile" (
         "tenantId", "taxId", website, "paymentNotes", "invoiceColor", "defaultNetDays", "termsAndConditions",
+        "invoiceEmail", "invoicePhone", "invoiceRepresentativeName",
         "logoMime", "logoData"
       )
       VALUES (
         ${ctx.tenantId}, ${taxId.value}, ${website.value}, ${paymentNotes}, ${invoiceColor.value},
-        ${defaultNetDays.value}, ${termsAndConditions.value}, NULL, NULL
+        ${defaultNetDays.value}, ${termsAndConditions.value},
+        ${invoiceEmail.value}, ${invoicePhone.value}, ${invoiceRepresentativeName.value},
+        NULL, NULL
       )
       ON CONFLICT ("tenantId") DO UPDATE SET
         "taxId" = EXCLUDED."taxId",
@@ -759,6 +782,9 @@ export async function saveCompanyProfile(_prev: { error?: string }, formData: Fo
         "invoiceColor" = EXCLUDED."invoiceColor",
         "defaultNetDays" = EXCLUDED."defaultNetDays",
         "termsAndConditions" = EXCLUDED."termsAndConditions",
+        "invoiceEmail" = EXCLUDED."invoiceEmail",
+        "invoicePhone" = EXCLUDED."invoicePhone",
+        "invoiceRepresentativeName" = EXCLUDED."invoiceRepresentativeName",
         "logoMime" = NULL,
         "logoData" = NULL
     `;
@@ -766,11 +792,14 @@ export async function saveCompanyProfile(_prev: { error?: string }, formData: Fo
     await prisma.$executeRaw`
       INSERT INTO "CompanyProfile" (
         "tenantId", "taxId", website, "paymentNotes", "invoiceColor", "defaultNetDays", "termsAndConditions",
+        "invoiceEmail", "invoicePhone", "invoiceRepresentativeName",
         "logoMime", "logoData"
       )
       VALUES (
         ${ctx.tenantId}, ${taxId.value}, ${website.value}, ${paymentNotes}, ${invoiceColor.value},
-        ${defaultNetDays.value}, ${termsAndConditions.value}, ${logoMime}, ${logoData}
+        ${defaultNetDays.value}, ${termsAndConditions.value},
+        ${invoiceEmail.value}, ${invoicePhone.value}, ${invoiceRepresentativeName.value},
+        ${logoMime}, ${logoData}
       )
       ON CONFLICT ("tenantId") DO UPDATE SET
         "taxId" = EXCLUDED."taxId",
@@ -779,17 +808,22 @@ export async function saveCompanyProfile(_prev: { error?: string }, formData: Fo
         "invoiceColor" = EXCLUDED."invoiceColor",
         "defaultNetDays" = EXCLUDED."defaultNetDays",
         "termsAndConditions" = EXCLUDED."termsAndConditions",
+        "invoiceEmail" = EXCLUDED."invoiceEmail",
+        "invoicePhone" = EXCLUDED."invoicePhone",
+        "invoiceRepresentativeName" = EXCLUDED."invoiceRepresentativeName",
         "logoMime" = EXCLUDED."logoMime",
         "logoData" = EXCLUDED."logoData"
     `;
   } else {
     await prisma.$executeRaw`
       INSERT INTO "CompanyProfile" (
-        "tenantId", "taxId", website, "paymentNotes", "invoiceColor", "defaultNetDays", "termsAndConditions"
+        "tenantId", "taxId", website, "paymentNotes", "invoiceColor", "defaultNetDays", "termsAndConditions",
+        "invoiceEmail", "invoicePhone", "invoiceRepresentativeName"
       )
       VALUES (
         ${ctx.tenantId}, ${taxId.value}, ${website.value}, ${paymentNotes}, ${invoiceColor.value},
-        ${defaultNetDays.value}, ${termsAndConditions.value}
+        ${defaultNetDays.value}, ${termsAndConditions.value},
+        ${invoiceEmail.value}, ${invoicePhone.value}, ${invoiceRepresentativeName.value}
       )
       ON CONFLICT ("tenantId") DO UPDATE SET
         "taxId" = EXCLUDED."taxId",
@@ -797,7 +831,10 @@ export async function saveCompanyProfile(_prev: { error?: string }, formData: Fo
         "paymentNotes" = EXCLUDED."paymentNotes",
         "invoiceColor" = EXCLUDED."invoiceColor",
         "defaultNetDays" = EXCLUDED."defaultNetDays",
-        "termsAndConditions" = EXCLUDED."termsAndConditions"
+        "termsAndConditions" = EXCLUDED."termsAndConditions",
+        "invoiceEmail" = EXCLUDED."invoiceEmail",
+        "invoicePhone" = EXCLUDED."invoicePhone",
+        "invoiceRepresentativeName" = EXCLUDED."invoiceRepresentativeName"
     `;
   }
 
@@ -808,13 +845,13 @@ export async function saveCompanyProfile(_prev: { error?: string }, formData: Fo
   return {};
 }
 
-export async function saveCompanyBankAction(_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> {
+export async function saveCompanyBankAction(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const ctx = await requireTenantAdmin();
   const branding = await getCompanyBranding(ctx.tenantId, ctx.tenantName);
   if (branding.hasBank) return { error: "Company bank details are locked and cannot be changed." };
   if (!branding.country) return { error: "Company country is missing. Bank details follow the locked country." };
   const bank = parseBankFromForm(formData, branding.country);
-  if (!bank.ok) return { error: bank.error };
+  if (!bank.ok) return invalidResult("bankName", bank);
 
   await prisma.$executeRaw`
     INSERT INTO "CompanyProfile" (
@@ -842,7 +879,7 @@ export async function saveCompanyBankAction(_prev: { error?: string }, formData:
   return {};
 }
 
-export async function createTenantAction(_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> {
+export async function createTenantAction(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const session = await requireSessionUser();
   const identity = parseCompanyIdentity({
     name: formField(formData, "name"),
@@ -857,7 +894,7 @@ export async function createTenantAction(_prev: { error?: string }, formData: Fo
     bankIban: formField(formData, "bankIban"),
     bankSwift: formField(formData, "bankSwift"),
   });
-  if (!identity.ok) return { error: identity.error };
+  if (!identity.ok) return identityInvalid(identity, "name");
   const result = await createCompanyForUser(session.user.id, {
     name: identity.value.name,
     email: identity.value.email ?? session.user.email ?? null,
@@ -866,7 +903,7 @@ export async function createTenantAction(_prev: { error?: string }, formData: Fo
     country: identity.value.country,
     zipCode: identity.value.zipCode,
     bank: identity.value.bank,
-  });
+  }, session.user.email);
   if ("error" in result) return { error: result.error };
   await setActiveCompanyCookie(result.tenant.id);
   revalidatePath("/", "layout");

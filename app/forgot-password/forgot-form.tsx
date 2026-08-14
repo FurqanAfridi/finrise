@@ -4,12 +4,16 @@ import { useActionState } from "react";
 import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { requestPasswordResetAction } from "@/app/actions/auth";
+import { TextInput } from "@/components/forms";
 
 export function ForgotPasswordForm() {
-  const [state, action, pending] = useActionState(requestPasswordResetAction, {} as { error?: string; ok?: boolean });
+  const [state, action, pending] = useActionState(requestPasswordResetAction, {} as {
+    error?: string;
+    ok?: boolean;
+    fieldErrors?: Record<string, string>;
+  });
 
   if (state.ok) {
     return (
@@ -28,8 +32,16 @@ export function ForgotPasswordForm() {
 
   return (
     <Box component="form" action={action} sx={{ width: 1, display: "grid", gap: 2 }}>
-      <TextField name="email" type="email" label="Email Address" fullWidth required autoComplete="email" />
-      {state.error ? (
+      <TextInput
+        name="email"
+        type="email"
+        label="Email Address"
+        required
+        autoComplete="email"
+        size="medium"
+        errorMessage={state.fieldErrors?.email}
+      />
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2">
           {state.error}
         </Typography>

@@ -85,7 +85,7 @@ export function ExpenseEntryForm({
         value={templateId}
         onChange={(event) => setTemplateId(event.target.value)}
       >
-        <option value="">None — enter details</option>
+        <option value="">None, enter details</option>
         {templates.map((row) => (
           <option key={row.id} value={row.id}>
             {row.label} · {row.categoryName} · {formatMoney(row.amount)}

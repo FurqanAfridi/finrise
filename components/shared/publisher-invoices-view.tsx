@@ -118,16 +118,16 @@ export function PublisherInvoicesView({
                       {row.publisherName}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {row.periodLabel || row.verticalName || (row.isInternal ? "Internal" : "—")}
+                      {row.periodLabel || row.verticalName || (row.isInternal ? "Internal" : "None")}
                     </Typography>
                   </TableCell>
-                  <TableCell>{row.invoiceNumber || "—"}</TableCell>
+                  <TableCell>{row.invoiceNumber || "None"}</TableCell>
                   <TableCell>{displayDate(row.dueDate)}</TableCell>
                   <TableCell align="right" className="fr-money">
                     {formatMoney(row.payable)}
                   </TableCell>
                   <TableCell align="right" className="fr-money">
-                    {row.paid == null ? "—" : formatMoney(row.paid)}
+                    {row.paid == null ? "None" : formatMoney(row.paid)}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", gap: 0.5 }}>
@@ -221,7 +221,7 @@ export function PublisherInvoicesView({
               </DrawerRow>
               <DrawerRow label="Paid">
                 <Typography className="fr-money" sx={{ fontWeight: 600 }}>
-                  {selected.paid == null ? "—" : formatMoney(selected.paid)}
+                  {selected.paid == null ? "None" : formatMoney(selected.paid)}
                 </Typography>
               </DrawerRow>
               {selected.varianceFlagged ? (
@@ -233,10 +233,10 @@ export function PublisherInvoicesView({
                 </DrawerRow>
               ) : null}
               <DrawerRow label="Period">
-                <Typography variant="body2">{selected.periodLabel || "—"}</Typography>
+                <Typography variant="body2">{selected.periodLabel || "None"}</Typography>
               </DrawerRow>
               <DrawerRow label="Vertical">
-                <Typography variant="body2">{selected.verticalName || "—"}</Typography>
+                <Typography variant="body2">{selected.verticalName || "None"}</Typography>
               </DrawerRow>
             </Box>
             <Divider />

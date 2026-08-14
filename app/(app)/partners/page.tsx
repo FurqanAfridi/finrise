@@ -211,11 +211,11 @@ export default async function PartnersPage() {
                 <TableCell>{money(Number(row.amountBase))}</TableCell>
                 <TableCell>
                   {row.amountConverted != null
-                    ? `${Number(row.amountConverted).toLocaleString()} ${row.targetCurrency ?? ""} @ ${row.conversionRate ?? "—"}`
-                    : "—"}
+                    ? `${Number(row.amountConverted).toLocaleString()} ${row.targetCurrency ?? ""} @ ${row.conversionRate ?? "None"}`
+                    : "None"}
                 </TableCell>
                 <TableCell>{displayDate(row.date)}</TableCell>
-                <TableCell>{row.note ?? "—"}</TableCell>
+                <TableCell>{row.note ?? "None"}</TableCell>
               </TableRow>
             ))}
           </TableBody>

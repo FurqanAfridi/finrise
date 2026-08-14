@@ -117,7 +117,7 @@ export function BuyerInvoicesView({
                       {row.buyerName}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {row.periodLabel || row.verticalName || "—"}
+                      {row.periodLabel || row.verticalName || "None"}
                     </Typography>
                   </TableCell>
                   <TableCell>{row.invoiceNumber || "Draft"}</TableCell>
@@ -126,7 +126,7 @@ export function BuyerInvoicesView({
                     {formatMoney(row.receivable)}
                   </TableCell>
                   <TableCell align="right" className="fr-money">
-                    {row.received == null ? "—" : formatMoney(row.received)}
+                    {row.received == null ? "None" : formatMoney(row.received)}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", gap: 0.5 }}>
@@ -215,7 +215,7 @@ export function BuyerInvoicesView({
               </DrawerRow>
               <DrawerRow label="Received">
                 <Typography className="fr-money" sx={{ fontWeight: 600 }}>
-                  {selected.received == null ? "—" : formatMoney(selected.received)}
+                  {selected.received == null ? "None" : formatMoney(selected.received)}
                 </Typography>
               </DrawerRow>
               {selected.varianceFlagged ? (
@@ -228,10 +228,10 @@ export function BuyerInvoicesView({
                 </DrawerRow>
               ) : null}
               <DrawerRow label="Period">
-                <Typography variant="body2">{selected.periodLabel || "—"}</Typography>
+                <Typography variant="body2">{selected.periodLabel || "None"}</Typography>
               </DrawerRow>
               <DrawerRow label="Vertical">
-                <Typography variant="body2">{selected.verticalName || "—"}</Typography>
+                <Typography variant="body2">{selected.verticalName || "None"}</Typography>
               </DrawerRow>
             </Box>
             <Divider />

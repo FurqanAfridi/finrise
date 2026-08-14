@@ -282,7 +282,7 @@ export function GenerateInvoiceForm({
               }}
               helperText={
                 amountUnlocked
-                  ? "Manual override — click Use calc to return to lead count × rate"
+                  ? "Manual override. Click Use calc to return to lead count × rate"
                   : `Auto: ${leadCount || "0"} × ${rate || "0"} = ${formatMoney(computedAmount)}. Click Edit to override.`
               }
             />
@@ -377,15 +377,15 @@ export function GenerateInvoiceForm({
               Check the details, then create the invoice.
             </Typography>
             <Stack spacing={1.25} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-              <ReviewRow label="Buyer" value={buyer?.name ?? "—"} />
-              <ReviewRow label="Email" value={email || "—"} />
+              <ReviewRow label="Buyer" value={buyer?.name ?? "None"} />
+              <ReviewRow label="Email" value={email || "None"} />
               <ReviewRow label="Invoice #" value={invoiceNumber} />
-              <ReviewRow label="Amount" value={effectiveAmount ? formatMoney(effectiveAmount) : "—"} money />
+              <ReviewRow label="Amount" value={effectiveAmount ? formatMoney(effectiveAmount) : "None"} money />
               <ReviewRow label="Terms" value={`Net - ${netDays || "0"}`} />
               <ReviewRow label="Rate" value={`${RATE_TYPE_LABEL[rateType]}${rate ? ` · ${rate}` : ""}`} />
               <ReviewRow label="Vertical" value={verticalName || "None"} />
-              <ReviewRow label="Period" value={periodLabel || "—"} />
-              <ReviewRow label="Description" value={comments || "—"} />
+              <ReviewRow label="Period" value={periodLabel || "None"} />
+              <ReviewRow label="Description" value={comments || "None"} />
             </Stack>
           </Box>
         ) : null}

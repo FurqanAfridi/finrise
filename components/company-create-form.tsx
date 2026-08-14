@@ -4,86 +4,80 @@ import { useActionState, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { createTenantAction } from "@/app/actions/ops";
 import { BankFields } from "@/components/bank-fields";
+import { NativeSelect, TextInput } from "@/components/forms";
 import { COUNTRIES, countryDial } from "@/lib/countries";
+import type { FormActionState } from "@/lib/form-state";
 
 export function CompanyCreateForm({
   submitLabel = "Create company",
 }: {
   submitLabel?: string;
 }) {
-  const [state, action] = useActionState(createTenantAction, {});
+  const [state, action] = useActionState(createTenantAction, {} as FormActionState);
   const [country, setCountry] = useState("US");
   const dial = useMemo(() => countryDial(country) || "+1", [country]);
+  const errors = state.fieldErrors ?? {};
 
   return (
     <Box component="form" action={action} sx={{ display: "grid", gap: 2 }}>
-      <TextField name="name" label="Company name" placeholder="e.g. Acme Inc." size="small" fullWidth required slotProps={{ htmlInput: { maxLength: 120 } }} />
-      <TextField
-        select
+      <TextInput
+        name="name"
+        label="Company name"
+        placeholder="e.g. Acme Inc."
+        required
+        maxLength={120}
+        errorMessage={errors.name}
+      />
+      <NativeSelect
         name="country"
         label="Country"
-        size="small"
-        fullWidth
         required
         value={country}
         onChange={(event) => setCountry(event.target.value)}
-        slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+        errorMessage={errors.country}
       >
         {COUNTRIES.map((row) => (
           <option key={row.code} value={row.code}>
             {row.name}
           </option>
         ))}
-      </TextField>
-      <TextField
+      </NativeSelect>
+      <TextInput
         name="phone"
         label="Phone number"
         placeholder="5551234567"
-        size="small"
-        fullWidth
         required
-        helperText="Digits only, 7–12 digits. The country code is added automatically."
-        slotProps={{
-          input: {
-            startAdornment: <InputAdornment position="start">{dial}</InputAdornment>,
-          },
-          htmlInput: { inputMode: "numeric", maxLength: 12, autoComplete: "tel-national" },
-        }}
-        onInput={(event) => {
-          const el = event.currentTarget as HTMLInputElement;
-          el.value = el.value.replace(/\D/g, "").slice(0, 12);
-        }}
+        kind="phone"
+        helperText={errors.phone ? undefined : "Digits only, 7 to 12 digits. The country code is added automatically."}
+        errorMessage={errors.phone}
+        startAdornment={<InputAdornment position="start">{dial}</InputAdornment>}
       />
-      <TextField name="address" label="Address" placeholder="e.g. 1 Main St" size="small" fullWidth required slotProps={{ htmlInput: { maxLength: 200 } }} />
-      <TextField
+      <TextInput
+        name="address"
+        label="Address"
+        placeholder="e.g. 1 Main St"
+        required
+        maxLength={200}
+        errorMessage={errors.address}
+      />
+      <TextInput
         name="zipCode"
         label="Zip code"
         placeholder="e.g. 94143"
-        size="small"
-        fullWidth
         required
-        slotProps={{
-          htmlInput: {
-            maxLength: 12,
-            inputMode: country === "US" || country === "IN" || country === "PK" ? "numeric" : "text",
-            style: { textTransform: "uppercase" },
-          },
-        }}
-        onInput={(event) => {
-          const el = event.currentTarget as HTMLInputElement;
-          if (country === "US" || country === "IN" || country === "PK" || country === "AU" || country === "DE" || country === "FR") {
-            el.value = el.value.replace(/[^\d-]/g, "").slice(0, 12);
-          } else {
-            el.value = el.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, "").slice(0, 12);
-          }
-        }}
+        maxLength={12}
+        errorMessage={errors.zipCode}
+        sanitize={(value) =>
+          country === "US" || country === "IN" || country === "PK" || country === "AU" || country === "DE" || country === "FR"
+            ? value.replace(/[^\d-]/g, "")
+            : value.toUpperCase().replace(/[^A-Z0-9\s-]/g, "")
+        }
       />
-      <BankFields key={country} country={country} size="small" />
-      {state.error ? (
+      <BankFields key={country} country={country} size="small" fieldErrors={errors} />
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2">
           {state.error}
         </Typography>

@@ -1,13 +1,18 @@
 import { COUNTRIES, countryDial } from "@/lib/countries";
 
-export type FieldResult<T> = { ok: true; value: T } | { ok: false; error: string };
+export type FieldResult<T> = { ok: true; value: T } | { ok: false; error: string; field?: string };
 
 function ok<T>(value: T): FieldResult<T> {
   return { ok: true, value };
 }
 
-function err(error: string): FieldResult<never> {
-  return { ok: false, error };
+function err(error: string, field?: string): FieldResult<never> {
+  return field ? { ok: false, error, field } : { ok: false, error };
+}
+
+export function tagged<T>(field: string, result: FieldResult<T>): FieldResult<T> {
+  if (result.ok) return result;
+  return { ok: false, error: result.error, field };
 }
 
 const EMAIL_RE = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/i;
@@ -69,9 +74,14 @@ export function parsePhone(local: string, country: string): FieldResult<string> 
     national = national.slice(dialDigits.length);
   }
   if (national.length < 7 || national.length > 12) {
-    return err("Phone number must be 7–12 digits (without country code).");
+    return err("Phone number must be 7 to 12 digits (without country code).");
   }
   return ok(`+${dialDigits}${national}`);
+}
+
+export function parseOptionalPhone(local: string, country: string): FieldResult<string | null> {
+  if (!local.trim()) return ok(null);
+  return parsePhone(local, country);
 }
 
 export function parseZipCode(value: string, country: string): FieldResult<string> {
@@ -186,7 +196,7 @@ export function parseSharePercent(value: string, label = "Share percent"): Field
 export function parseTaxId(value: string): FieldResult<string | null> {
   const raw = value.trim();
   if (!raw) return ok(null);
-  if (raw.length < 5 || raw.length > 20) return err("Enter a valid tax ID (5–20 characters).");
+  if (raw.length < 5 || raw.length > 20) return err("Enter a valid tax ID (5 to 20 characters).");
   if (!/^[A-Za-z0-9-]+$/.test(raw)) return err("Tax ID can only contain letters, numbers, and hyphens.");
   return ok(raw);
 }
@@ -263,7 +273,7 @@ export function parseAccountNumber(value: string): FieldResult<string> {
   if (!raw) return err("Account number is required.");
   if (hasLetters(raw)) return err("Account number cannot contain letters.");
   const digits = digitsOnly(raw);
-  if (digits.length < 6 || digits.length > 18) return err("Enter a valid bank account number (6–18 digits).");
+  if (digits.length < 6 || digits.length > 18) return err("Enter a valid bank account number (6 to 18 digits).");
   return ok(digits);
 }
 
@@ -281,10 +291,14 @@ export function parseAbaRouting(value: string): FieldResult<string> {
   if (!raw) return err("Routing number is required for US accounts.");
   if (hasLetters(raw)) return err("Routing number cannot contain letters.");
   const digits = digitsOnly(raw);
-  if (digits.length !== 9) return err("US routing number must be 9 digits.");
-  const d = digits.split("").map(Number);
-  const checksum = 3 * (d[0] + d[3] + d[6]) + 7 * (d[1] + d[4] + d[7]) + (d[2] + d[5] + d[8]);
-  if (checksum % 10 !== 0) return err("Enter a valid US routing number.");
+  if (digits.length !== 8 && digits.length !== 9) {
+    return err("Routing number must be 8 or 9 digits.");
+  }
+  if (digits.length === 9) {
+    const d = digits.split("").map(Number);
+    const checksum = 3 * (d[0] + d[3] + d[6]) + 7 * (d[1] + d[4] + d[7]) + (d[2] + d[5] + d[8]);
+    if (checksum % 10 !== 0) return err("Enter a valid US routing number.");
+  }
   return ok(digits);
 }
 
@@ -321,7 +335,7 @@ export function parseBankDetails(input: {
   bankSwift: string | null;
   bankDetails: string;
 }> {
-  const name = parseBankName(input.bankName);
+  const name = tagged("bankName", parseBankName(input.bankName));
   if (!name.ok) return name;
 
   const country = input.country.toUpperCase();
@@ -331,42 +345,42 @@ export function parseBankDetails(input: {
   let swift: string | null = null;
 
   if (country === "US") {
-    const routing = parseAbaRouting(input.routingNumber);
+    const routing = tagged("bankRoutingNumber", parseAbaRouting(input.routingNumber));
     if (!routing.ok) return routing;
-    const account = parseAccountNumber(input.accountNumber);
+    const account = tagged("bankAccountNumber", parseAccountNumber(input.accountNumber));
     if (!account.ok) return account;
     routingNumber = routing.value;
     accountNumber = account.value;
-    const swiftResult = parseSwift(input.swift, false);
+    const swiftResult = tagged("bankSwift", parseSwift(input.swift, false));
     if (!swiftResult.ok) return swiftResult;
     swift = swiftResult.value;
   } else if (country === "AU") {
-    const bsb = parseBsb(input.routingNumber);
+    const bsb = tagged("bankRoutingNumber", parseBsb(input.routingNumber));
     if (!bsb.ok) return bsb;
-    const account = parseAccountNumber(input.accountNumber);
+    const account = tagged("bankAccountNumber", parseAccountNumber(input.accountNumber));
     if (!account.ok) return account;
     routingNumber = bsb.value;
     accountNumber = account.value;
-    const swiftResult = parseSwift(input.swift, true);
+    const swiftResult = tagged("bankSwift", parseSwift(input.swift, true));
     if (!swiftResult.ok) return swiftResult;
     swift = swiftResult.value;
   } else if (IBAN_COUNTRIES.has(country)) {
-    const ibanResult = parseIban(input.iban);
+    const ibanResult = tagged("bankIban", parseIban(input.iban));
     if (!ibanResult.ok) return ibanResult;
     iban = ibanResult.value;
-    const swiftResult = parseSwift(input.swift, true);
+    const swiftResult = tagged("bankSwift", parseSwift(input.swift, true));
     if (!swiftResult.ok) return swiftResult;
     swift = swiftResult.value;
     if (input.accountNumber.trim()) {
-      const account = parseAccountNumber(input.accountNumber);
+      const account = tagged("bankAccountNumber", parseAccountNumber(input.accountNumber));
       if (!account.ok) return account;
       accountNumber = account.value;
     }
   } else {
-    const account = parseAccountNumber(input.accountNumber);
+    const account = tagged("bankAccountNumber", parseAccountNumber(input.accountNumber));
     if (!account.ok) return account;
     accountNumber = account.value;
-    const swiftResult = parseSwift(input.swift, true);
+    const swiftResult = tagged("bankSwift", parseSwift(input.swift, true));
     if (!swiftResult.ok) return swiftResult;
     swift = swiftResult.value;
   }
@@ -430,19 +444,19 @@ export function parseCompanyIdentity(input: {
   bankIban: string;
   bankSwift: string;
 }) {
-  const name = parseCompanyName(input.name);
+  const name = tagged("name", parseCompanyName(input.name));
   if (!name.ok) return name;
-  const country = parseCountry(input.country);
+  const country = tagged("country", parseCountry(input.country));
   if (!country.ok) return country;
-  const phone = parsePhone(input.phone, country.value);
+  const phone = tagged("phone", parsePhone(input.phone, country.value));
   if (!phone.ok) return phone;
-  const address = parseAddress(input.address);
+  const address = tagged("address", parseAddress(input.address));
   if (!address.ok) return address;
-  const zip = parseZipCode(input.zipCode, country.value);
+  const zip = tagged("zipCode", parseZipCode(input.zipCode, country.value));
   if (!zip.ok) return zip;
   let email: string | null = null;
   if (input.email?.trim()) {
-    const parsed = parseEmail(input.email, true);
+    const parsed = tagged("email", parseEmail(input.email, true));
     if (!parsed.ok) return parsed;
     email = parsed.value;
   }

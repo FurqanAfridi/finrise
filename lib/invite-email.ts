@@ -63,14 +63,14 @@ export function inviteEmailContent(input: {
     "",
     `Welcome to ${APP_NAME}! ${inviter} invited you to join ${company} as ${roleLabel}. We are glad to have you on the workspace.`,
     "",
-    `${APP_NAME} helps brokers, publishers, and buyers keep invoices, payouts, and profit in one calm place — so your team can focus on the work that grows the business.`,
+    `${APP_NAME} helps brokers, publishers, and buyers keep invoices, payouts, and profit in one calm place, so your team can focus on the work that grows the business.`,
     "",
     "To get started, accept your invitation and take a few minutes to explore the dashboard, invoices, and settings for your company.",
     "",
     `Accept your invitation (expires ${expires}):`,
     input.inviteUrl,
     "",
-    "We are committed to giving you a clear, reliable experience. If you need help at any point, reply to this email — our team is ready to assist.",
+    "We are committed to giving you a clear, reliable experience. If you need help at any point, reply to this email. Our team is ready to assist.",
     "",
     `Thank you for choosing ${APP_NAME}. We look forward to working with you.`,
     "",
@@ -139,7 +139,7 @@ export function inviteEmailContent(input: {
                       <strong style="color:#1B2430;">${escapeHtml(roleLabel)}</strong>. We are thrilled to have you on the team.
                     </p>
                     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#3A4553;">
-                      Our mission is to help brokers, publishers, and buyers keep invoices, payouts, and profit clear — so you can bring your campaigns to life without spreadsheet chaos.
+                      Our mission is to help brokers, publishers, and buyers keep invoices, payouts, and profit clear, so you can bring your campaigns to life without spreadsheet chaos.
                     </p>
                     <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#3A4553;">
                       To get started, accept your invitation and take a few moments to explore the dashboard and company workspace. The link expires on <strong style="color:#1B2430;">${escapeHtml(expires)}</strong>.
@@ -157,7 +157,7 @@ export function inviteEmailContent(input: {
                     </table>
 
                     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#3A4553;">
-                      We are committed to giving you a calm, reliable experience. If you need help at any point, reply to this email — our support team is ready to assist.
+                      We are committed to giving you a calm, reliable experience. If you need help at any point, reply to this email. Our support team is ready to assist.
                     </p>
                     <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#3A4553;">
                       Thank you for choosing ${APP_NAME}. We look forward to working with you.

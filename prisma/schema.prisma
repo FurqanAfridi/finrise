@@ -426,6 +426,9 @@ model CompanyProfile {
   invoiceColor         String? @default("#5E35B1")
   termsAndConditions   String?
   defaultNetDays       Int     @default(7)
+  invoiceEmail               String?
+  invoicePhone               String?
+  invoiceRepresentativeName  String?
 }
 
 model PartnerPayout {

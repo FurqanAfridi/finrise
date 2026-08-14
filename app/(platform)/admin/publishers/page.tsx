@@ -117,7 +117,7 @@ export default async function PlatformPublishersPage({
             <TableRow key={row.id} hover>
               <TableCell>{row.tenant.name}</TableCell>
               <TableCell>{row.name}</TableCell>
-              <TableCell>{row.email ?? "—"}</TableCell>
+              <TableCell>{row.email ?? "None"}</TableCell>
               <TableCell>{row.isInternal ? "Yes" : "No"}</TableCell>
               <TableCell align="right">
                 <Button

@@ -4,157 +4,144 @@ import { useActionState, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { signupAction } from "@/app/actions/auth";
 import { BankFields } from "@/components/bank-fields";
+import { NativeSelect, TextInput } from "@/components/forms";
 import { COUNTRIES, countryDial } from "@/lib/countries";
+import type { FormActionState } from "@/lib/form-state";
 
 export function SignupForm() {
-  const [state, action] = useActionState(signupAction, {});
+  const [state, action] = useActionState(signupAction, {} as FormActionState);
   const [country, setCountry] = useState("US");
   const dial = useMemo(() => countryDial(country) || "+1", [country]);
+  const errors = state.fieldErrors ?? {};
 
   return (
     <Box component="form" action={action} sx={{ width: 1, display: "grid", gap: 2, gridTemplateColumns: { sm: "1fr 1fr" } }}>
-      <TextField
+      <TextInput
         name="firstName"
         label="First name"
         placeholder="e.g. John"
-        fullWidth
         required
         autoComplete="given-name"
-        slotProps={{ htmlInput: { maxLength: 80 } }}
-        onInput={(event) => {
-          const el = event.currentTarget as HTMLInputElement;
-          el.value = el.value.replace(/[^\p{L}\s'.-]/gu, "").replace(/\s+/g, " ");
-        }}
+        size="medium"
+        kind="letters"
+        maxLength={80}
+        errorMessage={errors.firstName}
       />
-      <TextField
+      <TextInput
         name="lastName"
         label="Last name"
         placeholder="e.g. Doe"
-        fullWidth
         required
         autoComplete="family-name"
-        slotProps={{ htmlInput: { maxLength: 80 } }}
-        onInput={(event) => {
-          const el = event.currentTarget as HTMLInputElement;
-          el.value = el.value.replace(/[^\p{L}\s'.-]/gu, "").replace(/\s+/g, " ");
-        }}
+        size="medium"
+        kind="letters"
+        maxLength={80}
+        errorMessage={errors.lastName}
       />
-      <TextField
-        name="email"
-        type="email"
-        label="Email"
-        placeholder="e.g. john@acme.com"
-        fullWidth
-        required
-        autoComplete="email"
-        sx={{ gridColumn: { sm: "1 / -1" } }}
-        slotProps={{ htmlInput: { maxLength: 254 } }}
-      />
-      <TextField
-        name="companyName"
-        label="Company name"
-        placeholder="e.g. Acme Inc."
-        fullWidth
-        required
-        autoComplete="organization"
-        sx={{ gridColumn: { sm: "1 / -1" } }}
-        slotProps={{ htmlInput: { maxLength: 120 } }}
-      />
-      <TextField
-        select
+      <Box sx={{ gridColumn: { sm: "1 / -1" } }}>
+        <TextInput
+          name="email"
+          type="email"
+          label="Email"
+          placeholder="e.g. john@acme.com"
+          required
+          autoComplete="email"
+          size="medium"
+          maxLength={254}
+          errorMessage={errors.email}
+        />
+      </Box>
+      <Box sx={{ gridColumn: { sm: "1 / -1" } }}>
+        <TextInput
+          name="companyName"
+          label="Company name"
+          placeholder="e.g. Acme Inc."
+          required
+          autoComplete="organization"
+          size="medium"
+          maxLength={120}
+          errorMessage={errors.companyName}
+        />
+      </Box>
+      <NativeSelect
         name="country"
         label="Country"
-        fullWidth
         required
         value={country}
         onChange={(event) => setCountry(event.target.value)}
-        slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+        errorMessage={errors.country}
       >
         {COUNTRIES.map((row) => (
           <option key={row.code} value={row.code}>
             {row.name}
           </option>
         ))}
-      </TextField>
-      <TextField
+      </NativeSelect>
+      <TextInput
         name="phone"
         label="Phone number"
         placeholder="5551234567"
-        fullWidth
         required
         autoComplete="tel-national"
-        helperText="Digits only, 7–12 digits. The country code is added automatically."
-        slotProps={{
-          input: {
-            startAdornment: <InputAdornment position="start">{dial}</InputAdornment>,
-          },
-          htmlInput: { inputMode: "numeric", maxLength: 12 },
-        }}
-        onInput={(event) => {
-          const el = event.currentTarget as HTMLInputElement;
-          el.value = el.value.replace(/\D/g, "").slice(0, 12);
-        }}
+        size="medium"
+        kind="phone"
+        helperText={errors.phone ? undefined : "Digits only, 7 to 12 digits. The country code is added automatically."}
+        errorMessage={errors.phone}
+        startAdornment={<InputAdornment position="start">{dial}</InputAdornment>}
       />
-      <TextField
-        name="address"
-        label="Address"
-        placeholder="e.g. 1 Main St"
-        fullWidth
-        required
-        autoComplete="street-address"
-        sx={{ gridColumn: { sm: "1 / -1" } }}
-        slotProps={{ htmlInput: { maxLength: 200 } }}
-      />
-      <TextField
+      <Box sx={{ gridColumn: { sm: "1 / -1" } }}>
+        <TextInput
+          name="address"
+          label="Address"
+          placeholder="e.g. 1 Main St"
+          required
+          autoComplete="street-address"
+          size="medium"
+          maxLength={200}
+          errorMessage={errors.address}
+        />
+      </Box>
+      <TextInput
         name="zipCode"
         label="Zip code"
         placeholder="e.g. 94143"
-        fullWidth
         required
         autoComplete="postal-code"
-        slotProps={{
-          htmlInput: {
-            maxLength: 12,
-            inputMode: country === "US" || country === "IN" || country === "PK" ? "numeric" : "text",
-            style: { textTransform: "uppercase" },
-          },
-        }}
-        onInput={(event) => {
-          const el = event.currentTarget as HTMLInputElement;
-          if (country === "US" || country === "IN" || country === "PK" || country === "AU" || country === "DE" || country === "FR") {
-            el.value = el.value.replace(/[^\d-]/g, "").slice(0, 12);
-          } else {
-            el.value = el.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, "").slice(0, 12);
-          }
-        }}
+        size="medium"
+        maxLength={12}
+        errorMessage={errors.zipCode}
+        sanitize={(value) =>
+          country === "US" || country === "IN" || country === "PK" || country === "AU" || country === "DE" || country === "FR"
+            ? value.replace(/[^\d-]/g, "")
+            : value.toUpperCase().replace(/[^A-Z0-9\s-]/g, "")
+        }
       />
       <Box sx={{ display: { xs: "none", sm: "block" } }} />
-      <BankFields key={country} country={country} />
-      <TextField
+      <BankFields key={country} country={country} fieldErrors={errors} />
+      <TextInput
         name="password"
         type="password"
         label="Create password"
         placeholder="Minimum 8 characters"
-        fullWidth
         required
         autoComplete="new-password"
-        helperText="Minimum 8 characters"
-        slotProps={{ htmlInput: { minLength: 8 } }}
+        size="medium"
+        helperText={errors.password ? undefined : "Minimum 8 characters"}
+        errorMessage={errors.password}
       />
-      <TextField
+      <TextInput
         name="confirmPassword"
         type="password"
         label="Confirm password"
-        fullWidth
         required
         autoComplete="new-password"
-        slotProps={{ htmlInput: { minLength: 8 } }}
+        size="medium"
+        errorMessage={errors.confirmPassword}
       />
-      {state.error ? (
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2" sx={{ gridColumn: "1 / -1" }}>
           {state.error}
         </Typography>

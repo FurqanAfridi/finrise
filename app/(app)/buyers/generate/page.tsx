@@ -34,8 +34,14 @@ export default async function GenerateBuyerInvoicePage() {
           ) : null}
           <Box>
             <Typography sx={{ fontWeight: 700 }}>{branding.legalName}</Typography>
+            {branding.invoiceRepresentativeName ? (
+              <Typography variant="body2" color="text.secondary">
+                {branding.invoiceRepresentativeName}
+              </Typography>
+            ) : null}
             <Typography variant="body2" color="text.secondary">
-              {[branding.email, branding.phone].filter(Boolean).join(" · ") || "Add contact details in Settings"}
+              {[branding.contactEmail, branding.contactPhone].filter(Boolean).join(" · ") ||
+                "Add invoice contact in Settings → Branding"}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
               Terms Net - {branding.defaultNetDays}

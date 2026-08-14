@@ -4,12 +4,16 @@ import { useActionState } from "react";
 import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { completePasswordResetAction } from "@/app/actions/auth";
+import { TextInput } from "@/components/forms";
 
 export function ResetPasswordForm({ token }: { token: string }) {
-  const [state, action, pending] = useActionState(completePasswordResetAction, {} as { error?: string; ok?: boolean });
+  const [state, action, pending] = useActionState(completePasswordResetAction, {} as {
+    error?: string;
+    ok?: boolean;
+    fieldErrors?: Record<string, string>;
+  });
 
   if (state.ok) {
     return (
@@ -27,25 +31,25 @@ export function ResetPasswordForm({ token }: { token: string }) {
   return (
     <Box component="form" action={action} sx={{ width: 1, display: "grid", gap: 2 }}>
       <input type="hidden" name="token" value={token} />
-      <TextField
+      <TextInput
         name="password"
         type="password"
         label="New password"
-        fullWidth
         required
         autoComplete="new-password"
-        slotProps={{ htmlInput: { minLength: 8 } }}
+        size="medium"
+        errorMessage={state.fieldErrors?.password}
       />
-      <TextField
+      <TextInput
         name="confirmPassword"
         type="password"
         label="Confirm new password"
-        fullWidth
         required
         autoComplete="new-password"
-        slotProps={{ htmlInput: { minLength: 8 } }}
+        size="medium"
+        errorMessage={state.fieldErrors?.confirmPassword}
       />
-      {state.error ? (
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2">
           {state.error}
         </Typography>

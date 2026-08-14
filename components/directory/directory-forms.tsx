@@ -12,7 +12,8 @@ type ContactKind = "buyer" | "publisher" | "vertical";
 
 export function DirectoryAddForm() {
   const [kind, setKind] = useState<ContactKind>("buyer");
-  const [state, action] = useActionState(upsertDirectory, {} as { error?: string; ok?: boolean });
+  const [state, action] = useActionState(upsertDirectory, {} as { error?: string; ok?: boolean; fieldErrors?: Record<string, string> });
+  const errors = state.fieldErrors ?? {};
 
   return (
     <Box component="form" action={action} sx={{ display: "grid", gap: 2, gridTemplateColumns: { md: "1fr 1fr" } }}>
@@ -43,20 +44,21 @@ export function DirectoryAddForm() {
         <input type="hidden" name="kind" value={kind} />
       </Box>
 
-      <TextInput label="Company / name" name="name" required maxLength={120} />
+      <TextInput label="Company / name" name="name" required maxLength={120} errorMessage={errors.name} />
 
       {kind !== "vertical" ? (
         <>
-          <TextInput label="Contact name" name="contactName" required kind="letters" maxLength={80} />
-          <TextInput label="Email" name="email" type="email" required maxLength={254} />
+          <TextInput label="Contact name" name="contactName" required kind="letters" maxLength={80} errorMessage={errors.contactName} />
+          <TextInput label="Email" name="email" type="email" required maxLength={254} errorMessage={errors.email} />
           <NetDaysSelect
             name="defaultPaymentTermsDays"
             label="Default NET days"
             defaultValue={7}
             required
+            errorMessage={errors.defaultPaymentTermsDays}
           />
           <Box sx={{ gridColumn: "1 / -1" }}>
-            <TextInput label="Address" name="address" required maxLength={200} />
+            <TextInput label="Address" name="address" required maxLength={200} errorMessage={errors.address} />
           </Box>
           <TextInput label="Default payment terms" name="defaultTerms" maxLength={80} />
           {kind === "buyer" ? (
@@ -70,7 +72,7 @@ export function DirectoryAddForm() {
         </>
       ) : null}
 
-      {state.error ? (
+      {state.error && !state.fieldErrors ? (
         <Typography color="error" variant="body2" sx={{ gridColumn: "1 / -1" }}>
           {state.error}
         </Typography>

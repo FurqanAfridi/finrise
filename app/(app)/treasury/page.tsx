@@ -85,7 +85,7 @@ export default async function TreasuryPage() {
                 {charges.map((row) => (
                   <TableRow key={row.id} hover>
                     <TableCell>{row.kind}</TableCell>
-                    <TableCell>{row.monthLabel ?? "—"}</TableCell>
+                    <TableCell>{row.monthLabel ?? "None"}</TableCell>
                     <TableCell>{displayDate(row.date)}</TableCell>
                     <TableCell>{money(num(row.amount))}</TableCell>
                   </TableRow>
@@ -122,9 +122,9 @@ export default async function TreasuryPage() {
                 {transfers.map((row) => (
                   <TableRow key={row.id} hover>
                     <TableCell>{row.person}</TableCell>
-                    <TableCell>{row.usd == null ? "—" : money(num(row.usd))}</TableCell>
-                    <TableCell>{row.pkr == null ? "—" : num(row.pkr).toLocaleString("en-US")}</TableCell>
-                    <TableCell>{row.rate == null ? "—" : num(row.rate)}</TableCell>
+                    <TableCell>{row.usd == null ? "None" : money(num(row.usd))}</TableCell>
+                    <TableCell>{row.pkr == null ? "None" : num(row.pkr).toLocaleString("en-US")}</TableCell>
+                    <TableCell>{row.rate == null ? "None" : num(row.rate)}</TableCell>
                     <TableCell>{displayDate(row.date)}</TableCell>
                   </TableRow>
                 ))}

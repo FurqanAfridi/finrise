@@ -96,7 +96,7 @@ export default async function PlatformUsersPage({
           {rows.map((row) => (
             <TableRow key={row.id} hover>
               <TableCell>{row.email}</TableCell>
-              <TableCell>{row.name ?? "—"}</TableCell>
+              <TableCell>{row.name ?? "None"}</TableCell>
               <TableCell>{row.role}</TableCell>
               <TableCell sx={{ fontVariantNumeric: "tabular-nums" }}>{row._count.memberships}</TableCell>
               <TableCell>{row.createdAt.toISOString().slice(0, 10)}</TableCell>

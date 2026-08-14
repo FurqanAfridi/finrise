@@ -179,7 +179,7 @@ export function InvoiceLineFields({
             isDirect
               ? "Enter the total for this line"
               : unlocked
-                ? "Manual override — click Use calc to return to lead count × rate"
+                ? "Manual override. Click Use calc to return to lead count × rate"
                 : `Auto: ${leadCount || "0"} × ${rate || "0"} = ${formatMoneyInput(computed)}. Click Edit to override.`
           }
         />

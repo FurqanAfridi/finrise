@@ -56,7 +56,7 @@ export default async function PlatformInvitesPage() {
                       {link}
                     </Typography>
                   ) : (
-                    "—"
+                    "None"
                   )}
                 </TableCell>
                 <TableCell align="right">
