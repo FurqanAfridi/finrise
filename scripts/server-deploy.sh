@@ -10,6 +10,9 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+echo "==> Aligning lander / app / admin hosts"
+bash scripts/sync-production-hosts.sh
+
 echo "==> Installing dependencies (including build tooling)"
 # Do not set NODE_ENV=production here — npm would skip needed build packages.
 npm ci
