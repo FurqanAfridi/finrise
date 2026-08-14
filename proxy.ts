@@ -37,14 +37,26 @@ function isPublicPath(pathname: string, adminHost: boolean) {
   return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+function isGoogleSiteVerifyPath(pathname: string) {
+  return /^\/google[a-z0-9]+\.html$/i.test(pathname);
+}
+
 function isMarketingPublicPath(pathname: string) {
   if (MARKETING_PATHS.has(pathname)) return true;
+  if (isGoogleSiteVerifyPath(pathname)) return true;
   return pathname === "/privacy" || pathname.startsWith("/privacy/") || pathname === "/terms" || pathname.startsWith("/terms/");
 }
 
 export function proxy(request: NextRequest) {
   const host = request.headers.get("host");
   const { pathname, search } = request.nextUrl;
+
+  if (isGoogleSiteVerifyPath(pathname)) {
+    const dest = request.nextUrl.clone();
+    dest.pathname = "/api/google-site-verification";
+    dest.search = `?file=${encodeURIComponent(pathname.slice(1))}`;
+    return NextResponse.rewrite(dest);
+  }
 
   if (isLegacyAppHost(host)) {
     return NextResponse.redirect(`https://${APP_HOST}${pathname}${search}`, 308);

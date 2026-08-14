@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { SettingsRow, SettingsSection, SettingsValue } from "@/components/settings/settings-ui";
 import { disconnectGoogleSheetsAction } from "@/app/actions/integrations";
 import { getGoogleSheetsConnection, googleSheetsConfigured } from "@/lib/google-sheets";
+import { APP_NAME } from "@/lib/brand";
 import { requireBrokerOps } from "@/lib/tenant";
 
 export default async function IntegrationsPage({
@@ -47,14 +48,14 @@ export default async function IntegrationsPage({
 
       <SettingsSection
         title="Google Sheets"
-        description="Connect once, then pick a spreadsheet and label each column. Fundlookup only reads the sheets you choose. This follows Google Limited Use rules. See the privacy policy for details."
+        description={`Connect once, then pick a spreadsheet and label each column. ${APP_NAME} only reads the sheets you choose. This follows Google Limited Use rules. See the privacy policy for details.`}
       >
         <SettingsRow
           label="Account"
           hint={
             configured
               ? "Uses Google sign-in. You can disconnect at any time."
-              : "Ask whoever hosts Fundlookup to set the Google client ID and secret."
+              : `Ask whoever hosts ${APP_NAME} to set the Google client ID and secret.`}
           }
           action={
             connection ? (

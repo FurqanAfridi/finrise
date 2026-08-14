@@ -46,8 +46,9 @@ export function MarketingHeader({ current }: { current?: "privacy" | "terms" | "
           flexWrap: "wrap",
         }}
       >
-        <Link href={site} aria-label={`${APP_NAME} home`} style={{ display: "inline-flex", minHeight: 44, alignItems: "center" }}>
-          <Logo />
+        <Link href={site} aria-label={`${APP_NAME} home`} style={{ display: "inline-flex", minHeight: 44, alignItems: "center", gap: 10, textDecoration: "none", color: "var(--fr-text)" }}>
+          <Logo compact size={32} />
+          <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.02em" }}>{APP_NAME}</span>
         </Link>
         <nav aria-label="Site" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
           <Link href={`${site}/privacy`} style={navLink} aria-current={current === "privacy" ? "page" : undefined}>
@@ -81,7 +82,8 @@ export function MarketingFooter() {
     >
       <div style={{ maxWidth: "var(--fr-content-max)", margin: "0 auto", display: "grid", gap: 8 }}>
         <p style={{ margin: 0 }}>
-          {APP_NAME} is a hosted finance ledger for performance-marketing teams. Questions:{" "}
+          {APP_NAME} is a hosted finance application for performance-marketing teams. Privacy and terms apply to the
+          signed-in product at app.fundlookup.co. Questions:{" "}
           <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: "var(--fr-primary)", fontWeight: 600 }}>
             {SUPPORT_EMAIL}
           </a>

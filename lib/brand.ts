@@ -1,5 +1,7 @@
-export const APP_NAME = "Fundlookup";
+export const APP_NAME = "FundLookup";
 export const APP_TAGLINE = "Buyer, publisher, and profit tracking for performance marketing.";
+export const APP_PURPOSE =
+  "FundLookup is a web application for performance-marketing finance. Companies use FundLookup to create and track buyer invoices, publisher payouts, expenses, and monthly profit. FundLookup can optionally connect to Google so a signed-in user can import historical invoice rows from a Google Sheet they select.";
 export const POWERED_BY = "Devdabs";
 export const POWERED_BY_URL = process.env.POWERED_BY_URL?.replace(/\/$/, "") || "https://devdabs.com";
 export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL?.trim() || "admin@fundlookup.co";
