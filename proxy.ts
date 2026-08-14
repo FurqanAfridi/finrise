@@ -1,9 +1,27 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { APP_HOST, PLATFORM_ADMIN_HOST } from "@/lib/brand";
-import { isLegacyAdminHost, isLegacyAppHost, isLocalDevHost, isPlatformAdminHost } from "@/lib/platform-host";
+import {
+  isLegacyAdminHost,
+  isLegacyAppHost,
+  isLocalDevHost,
+  isMarketingHost,
+  isPlatformAdminHost,
+} from "@/lib/platform-host";
 
-export const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/forgot-password", "/reset-password", "/api/auth"];
+export const PUBLIC_PREFIXES = [
+  "/login",
+  "/signup",
+  "/invite",
+  "/forgot-password",
+  "/reset-password",
+  "/api/auth",
+  "/privacy",
+  "/terms",
+  "/welcome",
+];
+
+const MARKETING_PATHS = new Set(["/", "/privacy", "/terms", "/welcome", "/robots.txt", "/sitemap.xml"]);
 
 function hasSession(request: NextRequest) {
   return Boolean(
@@ -16,9 +34,12 @@ function isPublicPath(pathname: string, adminHost: boolean) {
   if (adminHost && (pathname === "/signup" || pathname.startsWith("/signup/"))) {
     return false;
   }
-  return PUBLIC_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function isMarketingPublicPath(pathname: string) {
+  if (MARKETING_PATHS.has(pathname)) return true;
+  return pathname === "/privacy" || pathname.startsWith("/privacy/") || pathname === "/terms" || pathname.startsWith("/terms/");
 }
 
 export function proxy(request: NextRequest) {
@@ -32,6 +53,13 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(`https://${PLATFORM_ADMIN_HOST}${pathname}${search}`, 308);
   }
 
+  if (isMarketingHost(host) && !isLocalDevHost(host)) {
+    if (isMarketingPublicPath(pathname)) {
+      return NextResponse.next();
+    }
+    return NextResponse.redirect(`https://${APP_HOST}${pathname}${search}`, 308);
+  }
+
   const adminHost = isPlatformAdminHost(host);
   const session = hasSession(request);
   const isPublic = isPublicPath(pathname, adminHost);
@@ -43,7 +71,6 @@ export function proxy(request: NextRequest) {
     if (pathname === "/") {
       return NextResponse.redirect(new URL(session ? "/admin" : "/login", request.url));
     }
-    // Platform admin UI lives under /admin; keep auth/invite public.
     const adminArea =
       pathname === "/admin" ||
       pathname.startsWith("/admin/") ||
@@ -65,7 +92,6 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Production app host: keep /admin off this domain. Localhost serves both.
   if (!isLocalDevHost(host) && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

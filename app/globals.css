@@ -86,6 +86,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.marketing-frame a:focus-visible {
+  outline: 2px solid var(--fr-primary);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

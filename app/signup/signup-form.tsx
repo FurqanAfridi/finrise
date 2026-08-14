@@ -146,6 +146,17 @@ export function SignupForm() {
           {state.error}
         </Typography>
       ) : null}
+      <Typography variant="caption" color="text.secondary" sx={{ gridColumn: "1 / -1", lineHeight: 1.5 }}>
+        By creating an account you agree to the{" "}
+        <Box component="a" href="/terms" sx={{ color: "primary.main", fontWeight: 600, textDecoration: "none" }}>
+          terms of service
+        </Box>{" "}
+        and{" "}
+        <Box component="a" href="/privacy" sx={{ color: "primary.main", fontWeight: 600, textDecoration: "none" }}>
+          privacy policy
+        </Box>
+        , including how optional Google Sheets import uses read-only spreadsheet data.
+      </Typography>
       <Button color="secondary" fullWidth size="large" type="submit" variant="contained" sx={{ gridColumn: "1 / -1" }}>
         Create account
       </Button>

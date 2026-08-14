@@ -49,4 +49,12 @@ New months are new invoices and expenses in the app. Do not add another Excel sh
 
 ## Deploy
 
-Set `DATABASE_URL`, `AUTH_SECRET`, and `AUTH_URL` on Vercel, Railway, or any Node host. Point Postgres at Neon, Supabase, or your own instance. Run `npx prisma migrate deploy` on release.
+Production hosts (same Next.js app, host-based routing):
+
+- **https://fundlookup.co** — lander, privacy, terms
+- **https://app.fundlookup.co** — signed-in product (`AUTH_URL`)
+- **https://admin.fundlookup.co** — platform admin (`PLATFORM_ADMIN_URL`)
+
+Set `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL=https://app.fundlookup.co`, `BRAND_SITE_URL=https://fundlookup.co`, and Google OAuth redirect `https://app.fundlookup.co/api/integrations/google/callback`. Run `npx prisma migrate deploy` on release.
+
+Pushing `main` deploys over SSH via `.github/workflows/deploy.yml`.

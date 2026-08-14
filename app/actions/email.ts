@@ -331,7 +331,7 @@ export async function sendPublisherInvoiceToCompanyAction(
   const amount = formatMoney(num(invoice.payable));
   const publisherName = invoice.publisher.name;
   const invoiceLabel = invoice.invoiceNumber || invoice.periodLabel || invoice.id.slice(-8);
-  const appUrl = (process.env.AUTH_URL || "https://fundlookup.co").replace(/\/$/, "");
+  const appUrl = (process.env.AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "https://app.fundlookup.co").replace(/\/$/, "");
   const href = `${appUrl}/publishers/${invoice.id}`;
   const subject = `Publisher invoice from ${publisherName}: ${invoiceLabel} (${amount})`;
   const text = [

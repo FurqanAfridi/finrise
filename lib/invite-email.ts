@@ -1,6 +1,7 @@
 import { TENANT_ROLE_LABEL } from "@/lib/status";
 import type { TenantRole } from "@/lib/roles";
 import { APP_NAME } from "@/lib/brand";
+import { marketingSiteUrl } from "@/lib/platform-host";
 import { INVITE_FROM_EMAIL, INVITE_FROM_NAME } from "@/lib/platform-mail";
 
 function escapeHtml(value: string) {
@@ -47,7 +48,7 @@ export function inviteEmailContent(input: {
   });
   const year = new Date().getFullYear();
   const site = (process.env.AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  const brandSite = (process.env.BRAND_SITE_URL || site).replace(/\/$/, "");
+  const brandSite = marketingSiteUrl();
   const markUrl = `${site}/brand/logo-mark.png?v=20260814a`;
   const privacyUrl = `${brandSite}/privacy`;
   const termsUrl = `${brandSite}/terms`;

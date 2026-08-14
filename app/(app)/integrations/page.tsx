@@ -2,6 +2,8 @@ import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import Link from "next/link";
 import { HistoricalImportWizard } from "@/components/integrations/historical-import-wizard";
 import { PageHeader } from "@/components/page-header";
 import { SettingsRow, SettingsSection, SettingsValue } from "@/components/settings/settings-ui";
@@ -45,13 +47,13 @@ export default async function IntegrationsPage({
 
       <SettingsSection
         title="Google Sheets"
-        description="Connect once, then pick a spreadsheet and label each column. Fundlookup only reads the sheets you choose."
+        description="Connect once, then pick a spreadsheet and label each column. Fundlookup only reads the sheets you choose. This follows Google Limited Use rules. See the privacy policy for details."
       >
         <SettingsRow
           label="Account"
           hint={
             configured
-              ? "Uses Google’s sign-in. You can disconnect at any time."
+              ? "Uses Google sign-in. You can disconnect at any time."
               : "Ask whoever hosts Fundlookup to set the Google client ID and secret."
           }
           action={
@@ -93,6 +95,12 @@ export default async function IntegrationsPage({
             {connection?.email ? `Connected as ${connection.email}` : connection ? "Connected" : "Not connected"}
           </SettingsValue>
         </SettingsRow>
+        <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 2 }}>
+          Disconnect removes the Google token we stored. Imported rows stay until you delete them.{" "}
+          <Link href="/privacy" style={{ fontWeight: 600, color: "inherit" }}>
+            Privacy policy
+          </Link>
+        </Typography>
       </SettingsSection>
 
       <HistoricalImportWizard googleConnected={Boolean(connection)} />

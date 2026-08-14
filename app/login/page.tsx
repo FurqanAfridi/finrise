@@ -84,6 +84,15 @@ export default async function LoginPage({
                 No public signup on this site. Use an invite link from the platform owner.
               </Typography>
             )}
+            <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+              <Link href="/privacy" style={{ color: "inherit", fontWeight: 600 }}>
+                Privacy
+              </Link>
+              {" · "}
+              <Link href="/terms" style={{ color: "inherit", fontWeight: 600 }}>
+                Terms
+              </Link>
+            </Typography>
             <PoweredBy />
           </Stack>
         </Box>

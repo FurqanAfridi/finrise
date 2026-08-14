@@ -2,12 +2,15 @@ import {
   APP_HOST,
   LEGACY_ADMIN_HOSTS,
   LEGACY_APP_HOSTS,
+  MARKETING_HOST,
   PLATFORM_ADMIN_HOST,
 } from "@/lib/brand";
 
-export { APP_HOST, PLATFORM_ADMIN_HOST };
+export { APP_HOST, MARKETING_HOST, PLATFORM_ADMIN_HOST };
 
 export const PLATFORM_ADMIN_HOSTS = new Set([PLATFORM_ADMIN_HOST, "localhost:3002"]);
+
+export const MARKETING_HOSTS = new Set([MARKETING_HOST, `www.${MARKETING_HOST}`]);
 
 export function isLocalDevHost(host: string | null | undefined): boolean {
   const h = (host ?? "").toLowerCase();
@@ -26,6 +29,17 @@ export function isPlatformAdminHost(host: string | null | undefined): boolean {
   return bare === PLATFORM_ADMIN_HOST;
 }
 
+export function isMarketingHost(host: string | null | undefined): boolean {
+  const h = (host ?? "").toLowerCase();
+  if (MARKETING_HOSTS.has(h)) return true;
+  return MARKETING_HOSTS.has(normalizeHost(host));
+}
+
+export function isAppProductHost(host: string | null | undefined): boolean {
+  const bare = normalizeHost(host);
+  return bare === APP_HOST || bare === `www.${APP_HOST}`;
+}
+
 export function isLegacyAppHost(host: string | null | undefined): boolean {
   const bare = normalizeHost(host);
   return (LEGACY_APP_HOSTS as readonly string[]).includes(bare);
@@ -36,6 +50,10 @@ export function isLegacyAdminHost(host: string | null | undefined): boolean {
   return (LEGACY_ADMIN_HOSTS as readonly string[]).includes(bare);
 }
 
+export function marketingSiteUrl(): string {
+  return process.env.BRAND_SITE_URL?.replace(/\/$/, "") || `https://${MARKETING_HOST}`;
+}
+
 export function platformAdminPublicUrl(): string {
   const explicit = process.env.PLATFORM_ADMIN_URL?.replace(/\/$/, "");
   if (explicit) return explicit;
@@ -44,7 +62,11 @@ export function platformAdminPublicUrl(): string {
   if (auth) {
     try {
       const url = new URL(auth);
-      if (url.hostname === APP_HOST || url.hostname === `www.${APP_HOST}`) {
+      if (
+        url.hostname === APP_HOST ||
+        url.hostname === MARKETING_HOST ||
+        url.hostname === `www.${MARKETING_HOST}`
+      ) {
         url.hostname = PLATFORM_ADMIN_HOST;
         return url.origin;
       }
