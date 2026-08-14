@@ -5,6 +5,14 @@ export { convertedAmount, partnerLedger } from "./partnerLedger";
 export { invoiceVariance, isOverdue } from "./variance";
 export { dueDate, lineTotal, parsePaymentTermsDays } from "./invoice";
 export { monthBounds, monthPeriodFilter, periodFilter, previousMonth } from "./period";
+export {
+  currentFinanceMonth,
+  financeMonthFromDate,
+  financeMonthLockMessage,
+  isFinanceMonthLocked,
+  lockedFinanceError,
+  lockedFinanceErrorForDates,
+} from "./month-lock";
 export type {
   DistributionResult,
   FinanceSettingsInput,

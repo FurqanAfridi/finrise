@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 
 export const INVITE_FROM_EMAIL = process.env.INVITE_FROM_EMAIL?.trim() || "admin@fundlookup.co";
-export const INVITE_FROM_NAME = process.env.INVITE_FROM_NAME?.trim() || "FundLookup";
+export const INVITE_FROM_NAME = process.env.INVITE_FROM_NAME?.trim() || "Fundlookup";
 
 function platformSmtpConfigured() {
   return Boolean(

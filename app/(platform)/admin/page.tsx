@@ -59,7 +59,7 @@ export default async function PlatformAdminHome() {
     <>
       <PageHeader
         title="Platform overview"
-        description="Manage every company, user, and invoice across FundLookup. Invite-only — no public signup on this admin site."
+        description="Manage every company, user, and invoice across Fundlookup. Invite-only — no public signup on this admin site."
       />
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 3 }}>
@@ -88,19 +88,21 @@ export default async function PlatformAdminHome() {
       <Grid container spacing={2}>
         {cards.map((card) => (
           <Grid key={card.href} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card component={Link} href={card.href} sx={{ textDecoration: "none", height: 1, display: "block" }}>
-              <CardContent>
-                <Typography variant="caption" color="text.secondary">
-                  {card.label}
-                </Typography>
-                <Typography variant="h4" sx={{ fontVariantNumeric: "tabular-nums", my: 0.5 }}>
-                  {card.value}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {card.hint}
-                </Typography>
-              </CardContent>
-            </Card>
+            <Link href={card.href} style={{ textDecoration: "none", color: "inherit", display: "block", height: "100%" }}>
+              <Card sx={{ height: 1 }}>
+                <CardContent>
+                  <Typography variant="caption" color="text.secondary">
+                    {card.label}
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontVariantNumeric: "tabular-nums", my: 0.5 }}>
+                    {card.value}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {card.hint}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Link>
           </Grid>
         ))}
       </Grid>

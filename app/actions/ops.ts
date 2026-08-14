@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requireBrokerOps, requireSessionUser, requireTenant, requireTenantAdmin, TENANT_COOKIE } from "@/lib/tenant";
 import { convertedAmount } from "@/lib/finance/partnerLedger";
 import { money } from "@/lib/finance/decimal";
+import { lockedFinanceError, lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { createCompanyForUser } from "@/lib/company";
 import { getCompanyBranding } from "@/lib/company-branding";
@@ -78,15 +79,38 @@ export async function switchTenantAction(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function upsertExpense(formData: FormData) {
+export async function upsertExpense(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   const year = Number(formData.get("year"));
   const month = Number(formData.get("month"));
-  const category = str(formData, "category");
-  const paid = dec(formData, "paid") ?? 0;
+  const templateId = str(formData, "templateId");
+  const template = templateId
+    ? await prisma.recurringExpense.findFirst({
+        where: { id: templateId, tenantId: ctx.tenantId },
+        include: { category: true },
+      })
+    : null;
+  if (templateId && !template) return { error: "That template was not found." };
+
+  const category = str(formData, "category") ?? template?.category.name ?? null;
+  const paid = dec(formData, "paid") ?? (template ? Number(template.amount) : 0);
   const actual = dec(formData, "actual") ?? paid;
-  if (!category || !year || !month || hasInvalidNumber(paid, actual, year, month)) return;
+  if (!category || !year || !month || hasInvalidNumber(paid, actual, year, month)) {
+    return { error: "Category, year, and month are required." };
+  }
+
+  const closed = lockedFinanceError(year, month);
+  if (closed) return { error: closed };
+  if (id) {
+    const existing = await prisma.expense.findFirst({ where: { id, tenantId: ctx.tenantId } });
+    if (!existing) return { error: "That expense was not found." };
+    const existingClosed = lockedFinanceError(existing.year, existing.month);
+    if (existingClosed) return { error: existingClosed };
+  }
 
   const categoryRow = await prisma.expenseCategory.upsert({
     where: { tenantId_name: { tenantId: ctx.tenantId, name: category } },
@@ -99,23 +123,28 @@ export async function upsertExpense(formData: FormData) {
     year,
     month,
     category,
-    label: str(formData, "label") ?? category,
+    label: str(formData, "label") ?? template?.label ?? category,
     categoryId: categoryRow.id,
     paid,
     actual,
     notes: str(formData, "notes"),
     paidAt: str(formData, "paidAt") ? new Date(String(formData.get("paidAt"))) : null,
     method: str(formData, "method"),
+    recurringExpenseId: template?.id ?? undefined,
   };
   if (id) await prisma.expense.updateMany({ where: { id, tenantId: ctx.tenantId }, data });
   else await prisma.expense.create({ data });
   revalidateFinance();
+  return {};
 }
 
 export async function deleteExpense(formData: FormData) {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   if (!id) return;
+  const existing = await prisma.expense.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  if (!existing) return;
+  if (lockedFinanceError(existing.year, existing.month)) return;
   await prisma.expense.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateFinance();
 }
@@ -146,11 +175,16 @@ export async function upsertRecurringExpense(formData: FormData) {
   revalidatePath("/expenses");
 }
 
-export async function generateRecurringForMonth(formData: FormData) {
+export async function generateRecurringForMonth(
+  _prev: { error?: string; ok?: boolean },
+  formData: FormData,
+): Promise<{ error?: string; ok?: boolean }> {
   const ctx = await requireTenant();
   const year = Number(formData.get("year"));
   const month = Number(formData.get("month"));
-  if (!year || !month) return;
+  if (!year || !month) return { error: "Choose a year and month." };
+  const closed = lockedFinanceError(year, month);
+  if (closed) return { error: closed };
   const templates = await prisma.recurringExpense.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
     include: { category: true },
@@ -175,6 +209,7 @@ export async function generateRecurringForMonth(formData: FormData) {
     });
   }
   revalidateFinance();
+  return { ok: true };
 }
 
 export async function deleteRecurringExpense(formData: FormData) {
@@ -288,6 +323,9 @@ export async function recordWithdrawal(formData: FormData) {
     : amountConvertedParsed.value;
   const targetCurrency = formField(formData, "targetCurrency").trim().toUpperCase() || null;
   if (targetCurrency && !/^[A-Z]{3}$/.test(targetCurrency)) return;
+  const withdrawalDate = str(formData, "date") ? new Date(String(formData.get("date"))) : new Date();
+  const closedWithdrawal = lockedFinanceErrorForDates([withdrawalDate]);
+  if (closedWithdrawal) return;
   await prisma.partnerWithdrawal.create({
     data: {
       tenantId: ctx.tenantId,
@@ -298,7 +336,7 @@ export async function recordWithdrawal(formData: FormData) {
       conversionRate: conversionRate.value,
       amountConverted,
       method: str(formData, "method"),
-      date: str(formData, "date") ? new Date(String(formData.get("date"))) : new Date(),
+      date: withdrawalDate,
       note: str(formData, "note"),
     },
   });
@@ -319,13 +357,23 @@ export async function upsertPayout(formData: FormData) {
   const person = str(formData, "person");
   const amount = dec(formData, "amount");
   if (!person || amount == null || hasInvalidNumber(amount)) return;
+  const year = dec(formData, "year");
+  const month = dec(formData, "month");
+  const payoutDate = str(formData, "date") ? new Date(String(formData.get("date"))) : null;
+  if (year && month && lockedFinanceError(year, month)) return;
+  if (lockedFinanceErrorForDates([payoutDate])) return;
+  if (id) {
+    const existing = await prisma.partnerPayout.findFirst({ where: { id, tenantId: ctx.tenantId } });
+    if (existing?.year && existing.month && lockedFinanceError(existing.year, existing.month)) return;
+    if (lockedFinanceErrorForDates([existing?.date ?? null])) return;
+  }
   const data = {
     tenantId: ctx.tenantId,
     person,
     amount,
-    year: dec(formData, "year"),
-    month: dec(formData, "month"),
-    date: str(formData, "date") ? new Date(String(formData.get("date"))) : null,
+    year,
+    month,
+    date: payoutDate,
     notes: str(formData, "notes"),
   };
   if (id) await prisma.partnerPayout.updateMany({ where: { id, tenantId: ctx.tenantId }, data });
@@ -338,6 +386,10 @@ export async function deletePayout(formData: FormData) {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   if (!id) return;
+  const existing = await prisma.partnerPayout.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  if (!existing) return;
+  if (existing.year && existing.month && lockedFinanceError(existing.year, existing.month)) return;
+  if (lockedFinanceErrorForDates([existing.date])) return;
   await prisma.partnerPayout.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidatePath("/payouts");
 }
@@ -934,12 +986,14 @@ export async function upsertTreasuryCharge(formData: FormData) {
   const ctx = await requireTenant();
   const amount = parseMoney(formField(formData, "amount"), "Amount", true);
   if (!amount.ok || amount.value == null) return;
+  const chargeDate = str(formData, "date") ? new Date(String(formData.get("date"))) : null;
+  if (lockedFinanceErrorForDates([chargeDate])) return;
   await prisma.ccCharge.create({
     data: {
       tenantId: ctx.tenantId,
       kind: str(formData, "kind") ?? "STATEMENT",
       monthLabel: str(formData, "monthLabel"),
-      date: str(formData, "date") ? new Date(String(formData.get("date"))) : null,
+      date: chargeDate,
       amount: amount.value,
       notes: str(formData, "notes"),
     },
@@ -953,6 +1007,8 @@ export async function upsertFxTransfer(formData: FormData) {
   const pkr = dec(formData, "pkr");
   const rate = dec(formData, "rate");
   if (hasInvalidNumber(usd, pkr, rate)) return;
+  const fxDate = str(formData, "date") ? new Date(String(formData.get("date"))) : null;
+  if (lockedFinanceErrorForDates([fxDate])) return;
   await prisma.fxTransfer.create({
     data: {
       tenantId: ctx.tenantId,
@@ -960,7 +1016,7 @@ export async function upsertFxTransfer(formData: FormData) {
       usd,
       pkr,
       rate,
-      date: str(formData, "date") ? new Date(String(formData.get("date"))) : null,
+      date: fxDate,
       notes: str(formData, "notes"),
     },
   });
@@ -987,6 +1043,7 @@ export async function upsertMonthReconciliation(formData: FormData) {
   const month = Number(formData.get("month"));
   const statementTotal = dec(formData, "statementTotal");
   if (!year || !month || statementTotal == null || hasInvalidNumber(statementTotal, year, month)) return;
+  if (lockedFinanceError(year, month)) return;
   await prisma.monthReconciliation.upsert({
     where: { tenantId_year_month: { tenantId: ctx.tenantId, year, month } },
     update: { statementTotal, notes: str(formData, "notes") },

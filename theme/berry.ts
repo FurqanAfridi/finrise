@@ -80,7 +80,8 @@ export const drawerWidth = 260;
 export const drawerCollapsedWidth = 72;
 export const contentMaxWidth = 1200;
 export const gridSpacing = 3;
-export const COLOR_MODE_KEY = "finrise-color-mode";
+export const COLOR_MODE_KEY = "fundlookup-color-mode";
+export const LEGACY_COLOR_MODE_KEY = "finrise-color-mode";
 
 function sharedTypography() {
   return {

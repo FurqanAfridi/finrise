@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Table from "@mui/material/Table";
@@ -87,7 +86,7 @@ export default async function PlatformPublisherInvoicesPage({
                 <StatusPill paymentStatus={row.paymentStatus} />
               </TableCell>
               <TableCell align="right">
-                <Button component={Link} href={`/admin/publisher-invoices/${row.id}`} size="small">
+                <Button href={`/admin/publisher-invoices/${row.id}`} size="small">
                   Edit
                 </Button>
               </TableCell>

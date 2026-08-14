@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import { bankPaymentLines, type CompanyBranding } from "@/lib/company-branding";
 import { displayDate } from "@/lib/dates";
 import { formatNetTerms } from "@/lib/finance/invoice";
@@ -114,7 +115,7 @@ export function invoiceEmailContent(
       <p style="margin-top: 24px; padding: 12px; background: #f8fafc; border-radius: 8px; color: #4b5563; font-size: 13px;">
         <strong>Download:</strong> A PDF of this invoice is attached to this email.
       </p>
-      <p style="color: #9ca3af; font-size: 12px;">Sent from Finrise for ${escapeHtml(branding.legalName)}.</p>
+      <p style="color: #9ca3af; font-size: 12px;">Sent from ${escapeHtml(APP_NAME)} for ${escapeHtml(branding.legalName)}.</p>
     </div>
   `;
 

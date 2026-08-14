@@ -27,6 +27,7 @@ import { Logo } from "@/components/berry/logo";
 import { PoweredBy } from "@/components/powered-by";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAvatar } from "@/components/user-avatar";
+import { APP_NAME } from "@/lib/brand";
 import { PLATFORM_NAV } from "@/lib/platform-nav";
 import { contentMaxWidth, drawerCollapsedWidth, drawerWidth } from "@/theme/berry";
 
@@ -111,7 +112,7 @@ export function PlatformShell({
           }}
         >
           <Toolbar sx={{ px: 2, gap: 1 }}>
-            <Logo />
+            <Logo compact={!desktopOpen} />
             {desktopOpen ? (
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 Platform
@@ -150,7 +151,7 @@ export function PlatformShell({
               <IconMenu2 size={20} />
             </IconButton>
             <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 600 }}>
-              FundLookup admin
+              {APP_NAME} admin
             </Typography>
             <ThemeToggle />
             <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="Account menu">

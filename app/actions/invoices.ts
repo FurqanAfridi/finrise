@@ -10,6 +10,7 @@ import { invoiceVariance } from "@/lib/finance/variance";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { nextBuyerInvoiceNumber } from "@/lib/company-branding";
+import { lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
 import {
   formField,
   parseEmail,
@@ -52,14 +53,26 @@ function revalidateLedgers() {
   revalidatePath("/reports");
 }
 
-export async function upsertBuyerInvoice(formData: FormData) {
+function invoiceLockError(...dates: Array<Date | null | undefined>) {
+  return lockedFinanceErrorForDates(dates);
+}
+
+export async function upsertBuyerInvoice(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   const buyerId = str(formData, "buyerId");
-  if (!buyerId) return;
+  if (!buyerId) return { error: "Choose a buyer." };
 
   const buyer = await prisma.buyer.findFirst({ where: { id: buyerId, tenantId: ctx.tenantId } });
-  if (!buyer) return;
+  if (!buyer) return { error: "Buyer not found." };
+
+  const existing = id
+    ? await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } })
+    : null;
+  if (id && !existing) return { error: "Invoice not found." };
 
   const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), RateType.CPL);
   const leadCount = dec(formData, "leadCount");
@@ -68,7 +81,7 @@ export async function upsertBuyerInvoice(formData: FormData) {
   const receivableInput = dec(formData, "receivable");
   const received = dec(formData, "received");
   const paymentTermsDaysInput = dec(formData, "paymentTermsDays");
-  if (hasInvalidNumber(leadCount, rate, revenueInput, receivableInput, received, paymentTermsDaysInput)) return;
+  if (hasInvalidNumber(leadCount, rate, revenueInput, receivableInput, received, paymentTermsDaysInput)) return { error: "Check the amounts and try again." };
   const computed = lineTotal(rateType, leadCount, rate, revenueInput);
   const revenue = revenueInput ?? computed.toNumber();
   const receivable = receivableInput ?? revenue;
@@ -80,6 +93,16 @@ export async function upsertBuyerInvoice(formData: FormData) {
   const due =
     date(formData, "dueDate") ??
     (periodEnd || periodStart ? dueDate(periodEnd ?? periodStart ?? new Date(), paymentTermsDays) : null);
+
+  const closed = invoiceLockError(
+    periodStart,
+    periodEnd,
+    due,
+    existing?.periodStart,
+    existing?.periodEnd,
+    existing?.dueDate,
+  );
+  if (closed) return { error: closed };
 
   const data = {
     tenantId: ctx.tenantId,
@@ -128,10 +151,17 @@ export async function upsertBuyerInvoice(formData: FormData) {
   redirect("/buyers");
 }
 
-export async function deleteBuyerInvoice(formData: FormData) {
+export async function deleteBuyerInvoice(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
   const ctx = await requireTenant();
   const id = str(formData, "id");
-  if (!id) return;
+  if (!id) return { error: "Invoice not found." };
+  const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  if (!invoice) return { error: "Invoice not found." };
+  const closed = invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate);
+  if (closed) return { error: closed };
   await prisma.buyerInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateLedgers();
   redirect("/buyers");
@@ -143,6 +173,8 @@ export async function markBuyerPaid(formData: FormData) {
   if (!id) return;
   const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!invoice) return;
+  const closed = invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate);
+  if (closed) return;
   const received = dec(formData, "received") ?? Number(invoice.received ?? invoice.receivable);
   await prisma.buyerInvoice.update({
     where: { id },
@@ -224,6 +256,8 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   const periodStart = periodStartResult.value ?? invoiceDate;
   const periodEnd = periodEndResult.value ?? invoiceDate;
   const due = dueDateResult.value ?? dueDate(invoiceDate, paymentTermsDays);
+  const closed = invoiceLockError(invoiceDate, periodStart, periodEnd, due);
+  if (closed) return { error: closed };
   const invoiceNumber = str(formData, "invoiceNumber") ?? (await nextBuyerInvoiceNumber(ctx.tenantId));
 
   const saved = await prisma.buyerInvoice.create({
@@ -257,6 +291,9 @@ export async function markBuyerInvoiceSent(formData: FormData) {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   if (!id) return;
+  const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  if (!invoice) return;
+  if (invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   await prisma.buyerInvoice.updateMany({
     where: { id, tenantId: ctx.tenantId },
     data: { invoiceStatus: InvoiceStatus.SENT },
@@ -264,33 +301,34 @@ export async function markBuyerInvoiceSent(formData: FormData) {
   revalidateLedgers();
 }
 
-export async function upsertPublisherInvoice(formData: FormData) {
+export async function upsertPublisherInvoice(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   let publisherId = str(formData, "publisherId");
 
   // Publishers can create/edit invoices for their own linked contact only.
   if (ctx.tenantRole === "PUBLISHER") {
-    if (!ctx.linkedPublisherId) return;
+    if (!ctx.linkedPublisherId) return { error: "Your publisher profile is not linked yet." };
     publisherId = ctx.linkedPublisherId;
   } else if (!canWrite(ctx.tenantRole, ctx.platformRole)) {
-    return;
+    return { error: "You cannot edit invoices." };
   }
 
-  if (!publisherId) return;
+  if (!publisherId) return { error: "Choose a publisher." };
 
   const publisher = await prisma.publisher.findFirst({ where: { id: publisherId, tenantId: ctx.tenantId } });
-  if (!publisher) return;
-
-  if (id) {
-    const existing = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
-    if (!existing) return;
-    if (ctx.tenantRole === "PUBLISHER" && existing.publisherId !== ctx.linkedPublisherId) return;
-  }
+  if (!publisher) return { error: "Publisher not found." };
 
   const previous = id
     ? await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } })
     : null;
+  if (id && !previous) return { error: "Invoice not found." };
+  if (previous && ctx.tenantRole === "PUBLISHER" && previous.publisherId !== ctx.linkedPublisherId) {
+    return { error: "You can only edit your own invoices." };
+  }
 
   const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), RateType.CPL);
   const leadCount = dec(formData, "leadCount");
@@ -299,7 +337,9 @@ export async function upsertPublisherInvoice(formData: FormData) {
   const payableInput = dec(formData, "payable");
   const paidInput = ctx.tenantRole === "PUBLISHER" ? null : dec(formData, "paid");
   const paymentTermsDaysInput = dec(formData, "paymentTermsDays");
-  if (hasInvalidNumber(leadCount, rate, amountInput, payableInput, paidInput, paymentTermsDaysInput)) return;
+  if (hasInvalidNumber(leadCount, rate, amountInput, payableInput, paidInput, paymentTermsDaysInput)) {
+    return { error: "Check the amounts and try again." };
+  }
   const computed = lineTotal(rateType, leadCount, rate, amountInput);
   // Prefer computed when amount matches count×rate path and amount was posted from locked calc.
   const amount = amountInput != null && !Number.isNaN(amountInput) ? amountInput : computed.toNumber();
@@ -312,6 +352,15 @@ export async function upsertPublisherInvoice(formData: FormData) {
   const due =
     date(formData, "dueDate") ??
     (periodEnd || periodStart ? dueDate(periodEnd ?? periodStart ?? new Date(), paymentTermsDays) : null);
+  const closed = invoiceLockError(
+    periodStart,
+    periodEnd,
+    due,
+    previous?.periodStart,
+    previous?.periodEnd,
+    previous?.dueDate,
+  );
+  if (closed) return { error: closed };
   const paymentStatus =
     ctx.tenantRole === "PUBLISHER"
       ? PaymentStatus.UNPAID
@@ -367,10 +416,17 @@ export async function upsertPublisherInvoice(formData: FormData) {
   redirect(ctx.tenantRole === "PUBLISHER" ? `/publishers/${saved.id}` : "/publishers");
 }
 
-export async function deletePublisherInvoice(formData: FormData) {
+export async function deletePublisherInvoice(
+  _prev: { error?: string },
+  formData: FormData,
+): Promise<{ error?: string }> {
   const ctx = await requireTenant();
   const id = str(formData, "id");
-  if (!id) return;
+  if (!id) return { error: "Invoice not found." };
+  const invoice = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  if (!invoice) return { error: "Invoice not found." };
+  const closed = invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate);
+  if (closed) return { error: closed };
   await prisma.publisherInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateLedgers();
   redirect("/publishers");
@@ -385,6 +441,7 @@ export async function markPublisherPaid(formData: FormData) {
     include: { publisher: true },
   });
   if (!invoice) return;
+  if (invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   const paid = dec(formData, "paid") ?? Number(invoice.paid ?? invoice.payable);
   await prisma.publisherInvoice.update({
     where: { id },
@@ -415,6 +472,9 @@ export async function approvePublisherPayment(formData: FormData) {
   const id = str(formData, "id");
   const decision = str(formData, "decision");
   if (!id) return;
+  const invoice = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  if (!invoice) return;
+  if (invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   await prisma.publisherInvoice.updateMany({
     where: { id, tenantId: ctx.tenantId, paidApprovalStatus: PaidApprovalStatus.PENDING },
     data: {

@@ -55,6 +55,7 @@ const SPECIAL: Record<string, PillSpec> = {
   pending_approval: { label: "Needs approval", tone: "warning", icon: IconClock },
   active: { label: "Active", tone: "success", icon: IconCircleCheck },
   inactive: { label: "Inactive", tone: "neutral", icon: IconBan },
+  closed: { label: "Closed", tone: "neutral", icon: IconBan },
 };
 
 export function StatusPill({
@@ -65,7 +66,7 @@ export function StatusPill({
 }: {
   paymentStatus?: PaymentStatus;
   invoiceStatus?: InvoiceStatus;
-  kind?: "overdue" | "pending_approval" | "active" | "inactive";
+  kind?: "overdue" | "pending_approval" | "active" | "inactive" | "closed";
   label?: string;
 }) {
   const spec =

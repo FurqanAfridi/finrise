@@ -6,14 +6,14 @@ const prisma = new PrismaClient();
 const DEFAULT_TENANT_ID = "clfinrisedefault0000000001";
 
 async function main() {
-  const email = (process.env.ADMIN_EMAIL ?? "admin@finrise.local").trim().toLowerCase();
+  const email = (process.env.ADMIN_EMAIL ?? "admin@fundlookup.co").trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD ?? "changeme";
   const passwordHash = await bcrypt.hash(password, 12);
 
   const tenant = await prisma.tenant.upsert({
     where: { slug: "finrise" },
-    update: { name: "Finrise" },
-    create: { id: DEFAULT_TENANT_ID, name: "Finrise", slug: "finrise" },
+    update: { name: "Fundlookup" },
+    create: { id: DEFAULT_TENANT_ID, name: "Fundlookup", slug: "finrise" },
   });
 
   const user = await prisma.user.upsert({

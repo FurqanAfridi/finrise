@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { PaletteMode } from "@mui/material/styles";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
-import { COLOR_MODE_KEY, createBerryTheme } from "@/theme/berry";
+import { COLOR_MODE_KEY, LEGACY_COLOR_MODE_KEY, createBerryTheme } from "@/theme/berry";
 
 type ColorModeContextValue = {
   mode: PaletteMode;
@@ -22,7 +22,7 @@ export function useColorMode() {
 
 function readStoredMode(): PaletteMode {
   if (typeof window === "undefined") return "light";
-  const stored = window.localStorage.getItem(COLOR_MODE_KEY);
+  const stored = window.localStorage.getItem(COLOR_MODE_KEY) ?? window.localStorage.getItem(LEGACY_COLOR_MODE_KEY);
   if (stored === "dark" || stored === "light") return stored;
   return "light";
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { APP_HOST, PLATFORM_ADMIN_HOST } from "@/lib/brand";
-import { isLegacyAdminHost, isLegacyAppHost, isPlatformAdminHost } from "@/lib/platform-host";
+import { isLegacyAdminHost, isLegacyAppHost, isLocalDevHost, isPlatformAdminHost } from "@/lib/platform-host";
 
 export const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/forgot-password", "/reset-password", "/api/auth"];
 
@@ -65,8 +65,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Main app host (fundlookup.co): keep /admin off this domain.
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+  // Production app host: keep /admin off this domain. Localhost serves both.
+  if (!isLocalDevHost(host) && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

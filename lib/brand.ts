@@ -1,4 +1,4 @@
-export const APP_NAME = "FundLookup";
+export const APP_NAME = "Fundlookup";
 export const APP_TAGLINE = "Buyer, publisher, and profit tracking for performance marketing.";
 export const POWERED_BY = "Devdabs";
 export const POWERED_BY_URL = process.env.POWERED_BY_URL?.replace(/\/$/, "") || "https://devdabs.com";

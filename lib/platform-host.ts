@@ -7,11 +7,12 @@ import {
 
 export { APP_HOST, PLATFORM_ADMIN_HOST };
 
-export const PLATFORM_ADMIN_HOSTS = new Set([
-  PLATFORM_ADMIN_HOST,
-  "localhost:3002",
-  ...(process.env.NODE_ENV !== "production" ? ["localhost", "127.0.0.1"] : []),
-]);
+export const PLATFORM_ADMIN_HOSTS = new Set([PLATFORM_ADMIN_HOST, "localhost:3002"]);
+
+export function isLocalDevHost(host: string | null | undefined): boolean {
+  const h = (host ?? "").toLowerCase();
+  return h.startsWith("localhost") || h.startsWith("127.0.0.1");
+}
 
 export function normalizeHost(host: string | null | undefined): string {
   return (host ?? "").split(":")[0]?.toLowerCase() || "";

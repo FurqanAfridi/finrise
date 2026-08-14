@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
@@ -102,7 +101,7 @@ export default async function PlatformUsersPage({
               <TableCell sx={{ fontVariantNumeric: "tabular-nums" }}>{row._count.memberships}</TableCell>
               <TableCell>{row.createdAt.toISOString().slice(0, 10)}</TableCell>
               <TableCell align="right">
-                <Button component={Link} href={`/admin/users/${row.id}`} size="small">
+                <Button href={`/admin/users/${row.id}`} size="small">
                   Manage
                 </Button>
               </TableCell>

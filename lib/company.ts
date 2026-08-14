@@ -1,4 +1,5 @@
 import { TenantRole } from "@prisma/client";
+import { ensureDefaultExpenseCategories } from "@/lib/finance/expense-categories";
 import { prisma } from "@/lib/prisma";
 
 export function slugifyCompanyName(name: string) {
@@ -53,6 +54,7 @@ export async function createCompanyForUser(userId: string, details: CompanyDetai
       settings: { create: { key: "companyName", value: name } },
     },
   });
+  await ensureDefaultExpenseCategories(tenant.id);
   await prisma.$executeRaw`
     INSERT INTO "CompanyProfile" (
       "tenantId", "legalName", email, phone, address, country, "zipCode",

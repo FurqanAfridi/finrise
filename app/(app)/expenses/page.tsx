@@ -13,16 +13,18 @@ import Typography from "@mui/material/Typography";
 import {
   deleteExpense,
   deleteRecurringExpense,
-  generateRecurringForMonth,
-  upsertExpense,
   upsertRecurringExpense,
 } from "@/app/actions/ops";
 import { MainCard } from "@/components/berry/main-card";
+import { ExpenseEntryForm } from "@/components/expenses/expense-entry-form";
+import { GenerateRecurringForm } from "@/components/expenses/generate-recurring-form";
 import { DayOfMonthSelect, MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { KpiCard } from "@/components/shared/kpi-card";
 import { StatusPill } from "@/components/shared/status-pill";
+import { ensureDefaultExpenseCategories } from "@/lib/finance/expense-categories";
+import { isFinanceMonthLocked, lockedFinanceError } from "@/lib/finance/month-lock";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { requireBrokerOps } from "@/lib/tenant";
@@ -39,6 +41,7 @@ export default async function ExpensesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const ctx = await requireBrokerOps();
+  await ensureDefaultExpenseCategories(ctx.tenantId);
   const params = await searchParams;
   const now = new Date();
   const year = Number(first(params.year) ?? now.getUTCFullYear());
@@ -46,7 +49,7 @@ export default async function ExpensesPage({
   const month = monthRaw === "all" || !monthRaw ? null : Number(monthRaw);
   const categoryFilter = first(params.category) || "";
   const editId = first(params.edit) || "";
-  const showInactive = first(params.templates) === "all";
+  const showInactive = first(params.templates) !== "active";
 
   const where = {
     tenantId: ctx.tenantId,
@@ -63,7 +66,7 @@ export default async function ExpensesPage({
       take: 200,
     }),
     prisma.recurringExpense.findMany({
-      where: { tenantId: ctx.tenantId, ...(showInactive ? {} : { isActive: true }) },
+      where: { tenantId: ctx.tenantId },
       include: { category: true },
       orderBy: [{ isActive: "desc" }, { label: "asc" }],
     }),
@@ -83,6 +86,11 @@ export default async function ExpensesPage({
 
   const actualTotal = num(totals._sum.actual);
   const paidTotal = num(totals._sum.paid);
+  const formYear = editRow?.year ?? (Number.isFinite(year) ? year : now.getUTCFullYear());
+  const formMonth = editRow?.month ?? month ?? now.getUTCMonth() + 1;
+  const formLocked = isFinanceMonthLocked(formYear, formMonth);
+  const formLockMessage = lockedFinanceError(formYear, formMonth);
+  const visibleTemplates = showInactive ? recurring : recurring.filter((row) => row.isActive);
   const formDefaults = editRow
     ? {
         id: editRow.id,
@@ -97,8 +105,8 @@ export default async function ExpensesPage({
       }
     : {
         id: "",
-        year,
-        month: month ?? now.getUTCMonth() + 1,
+        year: formYear,
+        month: formMonth,
         category: categoryFilter,
         label: "",
         actual: "",
@@ -111,7 +119,7 @@ export default async function ExpensesPage({
     <Box>
       <PageHeader
         title="Expenses"
-        description="Track monthly costs, edit past rows, and generate from recurring templates."
+        description="Track this month's costs with categories and recurring templates. Past months are closed and cannot be changed."
       />
 
       <Grid container spacing={gridSpacing} sx={{ mb: 3 }}>
@@ -177,38 +185,20 @@ export default async function ExpensesPage({
             title={editRow ? "Edit expense" : "Add expense"}
             contentSX={{ display: "grid", gap: 2, gridTemplateColumns: { md: "repeat(3, 1fr)" } }}
           >
-            <Box component="form" action={upsertExpense} sx={{ display: "contents" }}>
-              {formDefaults.id ? <input type="hidden" name="id" value={formDefaults.id} /> : null}
-              <YearSelect name="year" required defaultValue={formDefaults.year} />
-              <MonthSelect name="month" required defaultValue={formDefaults.month} />
-              <TextInput
-                label="Category"
-                name="category"
-                required
-                defaultValue={formDefaults.category}
-                maxLength={80}
-                helperText={categories.length ? `Suggestions: ${categories.slice(0, 4).map((c) => c.name).join(", ")}` : undefined}
-              />
-              <TextInput label="Label" name="label" defaultValue={formDefaults.label} maxLength={120} />
-              <TextInput label="Actual" name="actual" kind="decimal" maxDecimals={2} min={0} defaultValue={formDefaults.actual} />
-              <TextInput label="Paid" name="paid" kind="decimal" maxDecimals={2} min={0} defaultValue={formDefaults.paid} />
-              <TextInput label="Method" name="method" maxLength={80} defaultValue={formDefaults.method} />
-              <Box sx={{ gridColumn: { md: "1 / -1" } }}>
-                <TextInput label="Notes" name="notes" maxLength={240} defaultValue={formDefaults.notes} />
-              </Box>
-              <Stack direction="row" spacing={1} sx={{ gridColumn: { md: "1 / -1" } }}>
-                <Button type="submit" variant="contained" color="secondary">
-                  {editRow ? "Save changes" : "Add expense"}
-                </Button>
-                {editRow ? (
-                  <Link href={`/expenses?year=${year}${month ? `&month=${month}` : ""}`}>
-                    <Button type="button" variant="outlined">
-                      Cancel edit
-                    </Button>
-                  </Link>
-                ) : null}
-              </Stack>
-            </Box>
+            <ExpenseEntryForm
+              categories={categories}
+              templates={recurring.map((row) => ({
+                id: row.id,
+                label: row.label,
+                categoryName: row.category.name,
+                amount: num(row.amount),
+                isActive: row.isActive,
+              }))}
+              defaults={formDefaults}
+              cancelHref={`/expenses?year=${year}${month ? `&month=${month}` : ""}`}
+              locked={Boolean(editRow && formLocked)}
+              lockMessage={formLockMessage}
+            />
           </MainCard>
         </Grid>
         <Grid size={{ xs: 12, lg: 5 }}>
@@ -233,13 +223,7 @@ export default async function ExpensesPage({
                 Save template
               </Button>
             </Box>
-            <Box component="form" action={generateRecurringForMonth} sx={{ display: "grid", gap: 2 }}>
-              <YearSelect name="year" required defaultValue={year} />
-              <MonthSelect name="month" required defaultValue={month ?? now.getUTCMonth() + 1} />
-              <Button type="submit" variant="outlined">
-                Generate this month
-              </Button>
-            </Box>
+            <GenerateRecurringForm year={year} month={month ?? now.getUTCMonth() + 1} />
           </MainCard>
         </Grid>
       </Grid>
@@ -248,7 +232,7 @@ export default async function ExpensesPage({
         content={false}
         title="Templates"
         secondary={
-          <Link href={showInactive ? "/expenses" : "/expenses?templates=all"}>
+          <Link href={showInactive ? "/expenses?templates=active" : "/expenses"}>
             <Button size="small" variant="text">
               {showInactive ? "Hide inactive" : "Show inactive"}
             </Button>
@@ -256,10 +240,10 @@ export default async function ExpensesPage({
         }
         sx={{ mb: 3 }}
       >
-        {recurring.length === 0 ? (
+        {visibleTemplates.length === 0 ? (
           <Box sx={{ px: 2.5, py: 3 }}>
             <Typography variant="body2" color="text.secondary">
-              No recurring templates yet. Save one above to auto-create monthly rows.
+              No recurring templates yet. Save one above — salary, loan, purchases, and other categories are ready to use.
             </Typography>
           </Box>
         ) : (
@@ -276,7 +260,7 @@ export default async function ExpensesPage({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {recurring.map((row) => (
+                {visibleTemplates.map((row) => (
                   <TableRow key={row.id} hover>
                     <TableCell>{row.label}</TableCell>
                     <TableCell>{row.category.name}</TableCell>
@@ -335,11 +319,14 @@ export default async function ExpensesPage({
                     <TableCell>Label</TableCell>
                     <TableCell align="right">Actual</TableCell>
                     <TableCell align="right">Paid</TableCell>
+                    <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {expenses.map((row) => (
+                  {expenses.map((row) => {
+                    const rowLocked = isFinanceMonthLocked(row.year, row.month);
+                    return (
                     <TableRow key={row.id} hover selected={row.id === editId}>
                       <TableCell>
                         {monthName(row.month)} {row.year}
@@ -352,7 +339,15 @@ export default async function ExpensesPage({
                       <TableCell align="right" className="fr-money">
                         {formatMoney(num(row.paid))}
                       </TableCell>
+                      <TableCell>
+                        {rowLocked ? <StatusPill kind="closed" /> : null}
+                      </TableCell>
                       <TableCell align="right">
+                        {rowLocked ? (
+                          <Typography variant="body2" color="text.secondary">
+                            Closed
+                          </Typography>
+                        ) : (
                         <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
                           <Link
                             href={`/expenses?year=${row.year}&month=${row.month}&edit=${row.id}${
@@ -370,15 +365,19 @@ export default async function ExpensesPage({
                             </Button>
                           </Box>
                         </Stack>
+                        )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
 
             <Stack spacing={1.5} sx={{ display: { xs: "flex", md: "none" }, p: 2 }}>
-              {expenses.map((row) => (
+              {expenses.map((row) => {
+                const rowLocked = isFinanceMonthLocked(row.year, row.month);
+                return (
                 <Box
                   key={row.id}
                   sx={{
@@ -394,7 +393,7 @@ export default async function ExpensesPage({
                   <Typography variant="body2" color="text.secondary">
                     {monthName(row.month)} {row.year} · {row.categoryRel?.name ?? row.category}
                   </Typography>
-                  <Stack direction="row" sx={{ mt: 1, justifyContent: "space-between" }}>
+                  <Stack direction="row" sx={{ mt: 1, justifyContent: "space-between", alignItems: "center" }}>
                     <Typography variant="body2" className="fr-money">
                       Actual {formatMoney(num(row.actual))}
                     </Typography>
@@ -402,21 +401,28 @@ export default async function ExpensesPage({
                       Paid {formatMoney(num(row.paid))}
                     </Typography>
                   </Stack>
-                  <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
-                    <Link href={`/expenses?year=${row.year}&month=${row.month}&edit=${row.id}`}>
-                      <Button size="small" variant="outlined">
-                        Edit
-                      </Button>
-                    </Link>
-                    <Box component="form" action={deleteExpense}>
-                      <input type="hidden" name="id" value={row.id} />
-                      <Button type="submit" color="error" size="small">
-                        Delete
-                      </Button>
-                    </Box>
+                  <Stack direction="row" spacing={1} sx={{ mt: 1.25, alignItems: "center", flexWrap: "wrap" }}>
+                    {rowLocked ? (
+                      <StatusPill kind="closed" />
+                    ) : (
+                      <>
+                        <Link href={`/expenses?year=${row.year}&month=${row.month}&edit=${row.id}`}>
+                          <Button size="small" variant="outlined">
+                            Edit
+                          </Button>
+                        </Link>
+                        <Box component="form" action={deleteExpense}>
+                          <input type="hidden" name="id" value={row.id} />
+                          <Button type="submit" color="error" size="small">
+                            Delete
+                          </Button>
+                        </Box>
+                      </>
+                    )}
                   </Stack>
                 </Box>
-              ))}
+                );
+              })}
             </Stack>
           </>
         )}

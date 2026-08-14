@@ -1,4 +1,4 @@
-# Finrise
+# Fundlookup
 
 Hosted finance ledger for buyer invoices, publisher payables, monthly P&L, expenses, partner payouts, and treasury. Replaces the Payment Tracking workbook.
 
@@ -34,7 +34,7 @@ npm run import:xlsx
 npm run dev
 ```
 
-Sign in at [http://localhost:3000](http://localhost:3000) with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env` (defaults: `admin@finrise.local` / `changeme`).
+Sign in at [http://localhost:3000](http://localhost:3000) with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env` (defaults: `admin@fundlookup.co` / `changeme`).
 
 ## Daily use
 

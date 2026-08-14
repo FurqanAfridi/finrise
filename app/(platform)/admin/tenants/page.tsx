@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
@@ -112,7 +111,7 @@ export default async function PlatformTenantsPage({
                 {row._count.buyerInvoices + row._count.publisherInvoices}
               </TableCell>
               <TableCell align="right">
-                <Button component={Link} href={`/admin/tenants/${row.id}`} size="small">
+                <Button href={`/admin/tenants/${row.id}`} size="small">
                   Manage
                 </Button>
               </TableCell>

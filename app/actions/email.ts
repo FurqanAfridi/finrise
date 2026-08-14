@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { InvoiceStatus, TenantRole } from "@prisma/client";
+import { APP_NAME } from "@/lib/brand";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { invoiceEmailContent } from "@/lib/invoice-email";
 import { buildInvoicePdf, invoicePdfFilename } from "@/lib/invoice-pdf";
@@ -87,8 +88,8 @@ export async function testSmtpMailboxAction(
     const sent = await sendSmtpMail(ctx.tenantId, {
       to: to.value,
       subject: `SMTP test from ${ctx.tenantName}`,
-      text: `This is a test email from ${ctx.tenantName} in Finrise. SMTP is working.`,
-      html: `<p>This is a test email from <strong>${ctx.tenantName}</strong> in Finrise. SMTP is working.</p>`,
+      text: `This is a test email from ${ctx.tenantName} in ${APP_NAME}. SMTP is working.`,
+      html: `<p>This is a test email from <strong>${ctx.tenantName}</strong> in ${APP_NAME}. SMTP is working.</p>`,
       mailboxId: mailbox.id,
     });
     if ("error" in sent) return { error: sent.error };
@@ -339,9 +340,9 @@ export async function sendPublisherInvoiceToCompanyAction(
     invoice.periodLabel ? `Period: ${invoice.periodLabel}` : null,
     invoice.dueDate ? `Due: ${invoice.dueDate.toISOString().slice(0, 10)}` : null,
     "",
-    `Open in FundLookup: ${href}`,
+    `Open in ${APP_NAME}: ${href}`,
     "",
-    `Sent via FundLookup from ${INVITE_FROM_EMAIL} on behalf of ${publisherName}.`,
+    `Sent via ${APP_NAME} from ${INVITE_FROM_EMAIL} on behalf of ${publisherName}.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -355,7 +356,7 @@ export async function sendPublisherInvoiceToCompanyAction(
       ${invoice.periodLabel ? `<li>Period: ${escapeHtml(invoice.periodLabel)}</li>` : ""}
       ${invoice.dueDate ? `<li>Due: ${escapeHtml(invoice.dueDate.toISOString().slice(0, 10))}</li>` : ""}
     </ul>
-    <p><a href="${escapeHtml(href)}">Review this payable in FundLookup</a></p>
+    <p><a href="${escapeHtml(href)}">Review this payable in ${APP_NAME}</a></p>
     <p style="color:#6B7785;font-size:12px;">Sent from ${escapeHtml(INVITE_FROM_EMAIL)} with reference to ${escapeHtml(publisherName)}.</p>
   `;
 

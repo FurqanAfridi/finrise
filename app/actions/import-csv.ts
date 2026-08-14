@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { PaidApprovalStatus, PaymentStatus } from "@prisma/client";
 import { parsePeriodLabel } from "@/lib/finance/period";
 import { parsePaymentTermsDays } from "@/lib/finance/invoice";
+import { lockedFinanceError, lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
 import { prisma } from "@/lib/prisma";
 import { parseInvoiceStatus, parsePaymentStatus, parseRateType } from "@/lib/status";
 import { requireTenantAdmin } from "@/lib/tenant";
@@ -130,6 +131,11 @@ export async function importCsvAction(
           errors.push(`Row ${line}: category, year, and month are required`);
           continue;
         }
+        const closed = lockedFinanceError(year, month);
+        if (closed) {
+          errors.push(`Row ${line}: ${closed}`);
+          continue;
+        }
         if (sample.length < 5) {
           sample.push(`${year}-${String(month).padStart(2, "0")} · ${category} · ${actual}`);
         }
@@ -165,6 +171,11 @@ export async function importCsvAction(
       inferredYear = yearFromDue(row, inferredYear);
       const period = resolvePeriod(row, inferredYear);
       if (period.start) inferredYear = period.start.getUTCFullYear();
+      const closedPeriod = lockedFinanceErrorForDates([period.start, period.end, date(row.due_date)]);
+      if (closedPeriod) {
+        errors.push(`Row ${line}: ${closedPeriod}`);
+        continue;
+      }
 
       const total = num(row.total || row.total_revenue || row.amount) ?? 0;
       const count = num(row.count || row.unit_count || row.lead_count);

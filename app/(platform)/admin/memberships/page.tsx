@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Button from "@mui/material/Button";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
@@ -119,12 +118,12 @@ export default async function PlatformMembershipsPage({
           {rows.map((row) => (
             <TableRow key={row.id} hover>
               <TableCell>
-                <Button component={Link} href={`/admin/users/${row.userId}`} size="small">
+                <Button href={`/admin/users/${row.userId}`} size="small">
                   {row.user.email}
                 </Button>
               </TableCell>
               <TableCell>
-                <Button component={Link} href={`/admin/tenants/${row.tenantId}`} size="small">
+                <Button href={`/admin/tenants/${row.tenantId}`} size="small">
                   {row.tenant.name}
                 </Button>
               </TableCell>

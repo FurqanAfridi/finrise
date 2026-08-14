@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
@@ -71,7 +70,7 @@ export default async function PlatformTenantDetailPage({
           <Button type="submit" variant="contained">
             Save company
           </Button>
-          <Button component={Link} href="/admin/tenants" variant="outlined" color="secondary">
+          <Button href="/admin/tenants" variant="outlined" color="secondary">
             Back
           </Button>
         </Stack>
@@ -114,7 +113,7 @@ export default async function PlatformTenantDetailPage({
                 {TENANT_ROLE_LABEL[m.role] ?? m.role}
               </Typography>
             </div>
-            <Button component={Link} href={`/admin/users/${m.userId}`} size="small">
+            <Button href={`/admin/users/${m.userId}`} size="small">
               User
             </Button>
           </Stack>
@@ -157,7 +156,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function ChipLink({ href, label }: { href: string; label: string }) {
   return (
-    <Button component={Link} href={href} size="small" variant="outlined" color="secondary">
+    <Button href={href} size="small" variant="outlined" color="secondary">
       {label}
     </Button>
   );

@@ -1,6 +1,6 @@
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import { POWERED_BY, POWERED_BY_URL } from "@/lib/brand";
+import { APP_NAME, POWERED_BY, POWERED_BY_URL } from "@/lib/brand";
 
 export function PoweredBy({ compact = false }: { compact?: boolean }) {
   return (
@@ -11,7 +11,7 @@ export function PoweredBy({ compact = false }: { compact?: boolean }) {
     >
       {compact ? null : (
         <Box component="span" sx={{ display: "block", mb: 0.25 }}>
-          FundLookup
+          {APP_NAME}
         </Box>
       )}
       Powered by{" "}

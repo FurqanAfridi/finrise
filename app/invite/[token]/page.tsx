@@ -52,7 +52,7 @@ export default async function InvitePage({
                 <Typography variant="body2" color="text.secondary">
                   {platformInvite ? (
                     <>
-                      Join the FundLookup <strong>platform admin</strong> team as <strong>{invite.email}</strong>. You will
+                      Join the Fundlookup <strong>platform admin</strong> team as <strong>{invite.email}</strong>. You will
                       manage companies and data across the platform.
                     </>
                   ) : (

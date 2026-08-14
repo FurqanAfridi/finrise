@@ -1,10 +1,9 @@
-import Link from "next/link";
 import Button from "@mui/material/Button";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import { InvoiceStatus, PaymentStatus } from "@prisma/client";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { platformDeleteBuyerInvoice, platformUpdateBuyerInvoice } from "@/app/actions/platform";
 import { PageHeader } from "@/components/page-header";
 import { requirePlatformAdmin } from "@/lib/auth-guard";
@@ -65,7 +64,7 @@ export default async function PlatformBuyerInvoiceDetailPage({
           <Button type="submit" variant="contained">
             Save
           </Button>
-          <Button component={Link} href="/admin/buyer-invoices" variant="outlined" color="secondary">
+          <Button href="/admin/buyer-invoices" variant="outlined" color="secondary">
             Back
           </Button>
         </Stack>
@@ -74,7 +73,6 @@ export default async function PlatformBuyerInvoiceDetailPage({
         action={async (fd) => {
           "use server";
           await platformDeleteBuyerInvoice(fd);
-          redirect("/admin/buyer-invoices");
         }}
       >
         <input type="hidden" name="id" value={row.id} />

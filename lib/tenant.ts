@@ -1,16 +1,16 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { TenantRole } from "@prisma/client";
-import { Role } from "@/lib/roles";
+import { Role, TenantRole, type TenantRole as TenantRoleValue } from "@/lib/roles";
 import { auth } from "@/auth";
+import { isPlatformAdminHost, platformAdminPublicUrl } from "@/lib/platform-host";
 import { prisma } from "@/lib/prisma";
 
 export const TENANT_COOKIE = "finrise-tenant";
 
-export const SETTINGS_ROLES: TenantRole[] = [TenantRole.ADMIN];
-export const APPROVER_ROLES: TenantRole[] = [TenantRole.ADMIN, TenantRole.BROKER, TenantRole.ACCOUNTANT];
-export const WRITE_ROLES: TenantRole[] = [TenantRole.ADMIN, TenantRole.BROKER, TenantRole.ACCOUNTANT];
-export const BROKER_OPS_ROLES: TenantRole[] = [TenantRole.ADMIN, TenantRole.BROKER, TenantRole.ACCOUNTANT];
+export const SETTINGS_ROLES: TenantRoleValue[] = [TenantRole.ADMIN];
+export const APPROVER_ROLES: TenantRoleValue[] = [TenantRole.ADMIN, TenantRole.BROKER, TenantRole.ACCOUNTANT];
+export const WRITE_ROLES: TenantRoleValue[] = [TenantRole.ADMIN, TenantRole.BROKER, TenantRole.ACCOUNTANT];
+export const BROKER_OPS_ROLES: TenantRoleValue[] = [TenantRole.ADMIN, TenantRole.BROKER, TenantRole.ACCOUNTANT];
 
 export type TenantContext = {
   userId: string;
@@ -20,12 +20,12 @@ export type TenantContext = {
   tenantId: string;
   tenantName: string;
   tenantSlug: string;
-  tenantRole: TenantRole;
+  tenantRole: TenantRoleValue;
   /** When role is BUYER, invoices are limited to this contact. */
   linkedBuyerId: string | null;
   /** When role is PUBLISHER, payables are limited to this contact. */
   linkedPublisherId: string | null;
-  memberships: { tenantId: string; tenantName: string; tenantSlug: string; role: TenantRole }[];
+  memberships: { tenantId: string; tenantName: string; tenantSlug: string; role: TenantRoleValue }[];
 };
 
 export async function requireSessionUser() {
@@ -42,7 +42,11 @@ export async function requireTenant(): Promise<TenantContext> {
     orderBy: { createdAt: "asc" },
   });
   if (memberships.length === 0) {
-    redirect(session.user.role === Role.ADMIN ? "/admin" : "/no-tenant");
+    if (session.user.role === Role.ADMIN) {
+      const host = (await headers()).get("host");
+      redirect(isPlatformAdminHost(host) ? "/admin" : `${platformAdminPublicUrl()}/admin`);
+    }
+    redirect("/no-tenant");
   }
 
   const jar = await cookies();
@@ -90,11 +94,11 @@ export async function requireBrokerOps() {
   return ctx;
 }
 
-export function canWrite(role: TenantRole, platformRole?: string) {
+export function canWrite(role: TenantRoleValue, platformRole?: string) {
   return platformRole === "ADMIN" || WRITE_ROLES.includes(role);
 }
 
-export function canApprovePayments(role: TenantRole, platformRole?: string) {
+export function canApprovePayments(role: TenantRoleValue, platformRole?: string) {
   return platformRole === "ADMIN" || APPROVER_ROLES.includes(role);
 }
 

@@ -1,9 +1,11 @@
 "use client";
 
+import { useActionState } from "react";
 import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import { InvoiceStatus, PaymentStatus, RateType } from "@prisma/client";
 import { deleteBuyerInvoice, upsertBuyerInvoice } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
@@ -45,11 +47,14 @@ export function BuyerInvoiceForm({
   buyers: { id: string; name: string }[];
   verticals: { id: string; name: string }[];
 }) {
+  const [saveState, saveAction] = useActionState(upsertBuyerInvoice, {} as { error?: string });
+  const [deleteState, deleteAction] = useActionState(deleteBuyerInvoice, {} as { error?: string });
+  const error = saveState.error || deleteState.error;
   return (
     <MainCard title={invoice?.id ? "Edit invoice" : "New invoice"}>
       <Box
         component="form"
-        action={upsertBuyerInvoice}
+        action={saveAction}
         sx={{ display: "grid", gap: 2, gridTemplateColumns: { md: "repeat(3, 1fr)" } }}
       >
         {invoice?.id ? <input type="hidden" name="id" value={invoice.id} /> : null}
@@ -105,6 +110,11 @@ export function BuyerInvoiceForm({
         <TextInput label="Paid at" name="paidAt" type="date" defaultValue={isoDate(invoice?.paidAt)} />
         <TextInput label="Payment method" name="paymentMethod" defaultValue={invoice?.paymentMethod ?? ""} maxLength={80} />
         <TextInput label="Comments" name="comments" defaultValue={invoice?.comments ?? ""} maxLength={500} />
+        {error ? (
+          <Typography color="error" variant="body2" sx={{ gridColumn: "1 / -1" }}>
+            {error}
+          </Typography>
+        ) : null}
         <Stack direction="row" spacing={1} sx={{ gridColumn: "1 / -1" }}>
           <Button type="submit" variant="contained" color="secondary">
             Save invoice
@@ -117,7 +127,7 @@ export function BuyerInvoiceForm({
             </Link>
           ) : null}
           {invoice?.id ? (
-            <Button type="submit" color="error" formAction={deleteBuyerInvoice}>
+            <Button type="submit" color="error" formAction={deleteAction}>
               Delete
             </Button>
           ) : null}

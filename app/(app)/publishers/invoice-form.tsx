@@ -1,8 +1,10 @@
 "use client";
 
+import { useActionState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import { PaymentStatus, RateType } from "@prisma/client";
 import { deletePublisherInvoice, upsertPublisherInvoice } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
@@ -50,11 +52,14 @@ export function PublisherInvoiceForm({
   submitLabel?: string;
 }) {
   const publisherId = lockedPublisherId ?? invoice?.publisherId;
+  const [saveState, saveAction] = useActionState(upsertPublisherInvoice, {} as { error?: string });
+  const [deleteState, deleteAction] = useActionState(deletePublisherInvoice, {} as { error?: string });
+  const error = saveState.error || deleteState.error;
   return (
     <MainCard title={invoice?.id ? "Edit invoice" : "New invoice"}>
       <Box
         component="form"
-        action={upsertPublisherInvoice}
+        action={saveAction}
         sx={{ display: "grid", gap: 2, gridTemplateColumns: { md: "repeat(3, 1fr)" } }}
       >
         {invoice?.id ? <input type="hidden" name="id" value={invoice.id} /> : null}
@@ -120,12 +125,17 @@ export function PublisherInvoiceForm({
           name="paymentTermsDays"
           defaultValue={invoice?.paymentTermsDays ?? ""}
         />
+        {error ? (
+          <Typography color="error" variant="body2" sx={{ gridColumn: "1 / -1" }}>
+            {error}
+          </Typography>
+        ) : null}
         <Stack direction="row" spacing={1} sx={{ gridColumn: "1 / -1" }}>
           <Button type="submit" variant="contained" color="secondary">
             {submitLabel ?? (invoice?.id ? "Save invoice" : "Create invoice")}
           </Button>
           {invoice?.id && !lockedPublisherId ? (
-            <Button type="submit" color="error" formAction={deletePublisherInvoice}>
+            <Button type="submit" color="error" formAction={deleteAction}>
               Delete
             </Button>
           ) : null}

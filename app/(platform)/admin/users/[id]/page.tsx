@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Button from "@mui/material/Button";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
@@ -62,7 +61,7 @@ export default async function PlatformUserDetailPage({
           <Button type="submit" variant="contained">
             Save user
           </Button>
-          <Button component={Link} href="/admin/users" variant="outlined" color="secondary">
+          <Button href="/admin/users" variant="outlined" color="secondary">
             Back
           </Button>
         </Stack>
@@ -94,7 +93,7 @@ export default async function PlatformUserDetailPage({
                 {TENANT_ROLE_LABEL[m.role] ?? m.role}
               </Typography>
             </div>
-            <Button component={Link} href={`/admin/tenants/${m.tenantId}`} size="small">
+            <Button href={`/admin/tenants/${m.tenantId}`} size="small">
               Open company
             </Button>
           </Stack>

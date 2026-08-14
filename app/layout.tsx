@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: APP_NAME,
   description: APP_TAGLINE,
   icons: {
-    icon: [{ url: `/brand/logo-mark.png?v=20260813g`, type: "image/png" }],
+    icon: [{ url: `/brand/favicon.png?v=20260814a`, type: "image/png" }],
     apple: [{ url: "/apple-icon.png" }],
   },
 };
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className={inter.className}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var m=localStorage.getItem('finrise-color-mode');if(m!=='light'&&m!=='dark'){m='light'}document.documentElement.dataset.colorMode=m;document.documentElement.style.colorScheme=m}catch(e){document.documentElement.dataset.colorMode='light';document.documentElement.style.colorScheme='light'}`,
+            __html: `try{var m=localStorage.getItem('fundlookup-color-mode')||localStorage.getItem('finrise-color-mode');if(m!=='light'&&m!=='dark'){m='light'}document.documentElement.dataset.colorMode=m;document.documentElement.style.colorScheme=m}catch(e){document.documentElement.dataset.colorMode='light';document.documentElement.style.colorScheme='light'}`,
           }}
         />
         <ThemeRegistry>{children}</ThemeRegistry>

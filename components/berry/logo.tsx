@@ -2,65 +2,69 @@
 
 import Image from "next/image";
 import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
 import { useColorMode } from "@/components/color-mode";
+import { APP_NAME } from "@/lib/brand";
 
 /** Bump when brand assets change to defeat browser/CDN image caches. */
-export const BRAND_LOGO_VERSION = "20260813g";
+export const BRAND_LOGO_VERSION = "20260814b";
+
+const LIGHT_MARK = `/brand/logo-mark.png?v=${BRAND_LOGO_VERSION}`;
+const DARK_MARK = `/brand/logo-mark-dark.png?v=${BRAND_LOGO_VERSION}`;
+const LIGHT_WORDMARK = `/brand/logo.png?v=${BRAND_LOGO_VERSION}`;
+const DARK_WORDMARK = `/brand/logo-dark.png?v=${BRAND_LOGO_VERSION}`;
+const WORDMARK_RATIO = 590 / 104;
 
 export function Logo({ compact = false, size = 34 }: { compact?: boolean; size?: number }) {
   const { mode } = useColorMode();
-  const src =
-    mode === "dark"
-      ? `/brand/logo-mark-dark.png?v=${BRAND_LOGO_VERSION}`
-      : `/brand/logo-mark.png?v=${BRAND_LOGO_VERSION}`;
+  const dark = mode === "dark";
+  const markSrc = dark ? DARK_MARK : LIGHT_MARK;
+  const wordSrc = dark ? DARK_WORDMARK : LIGHT_WORDMARK;
+  const wordWidth = Math.round(size * WORDMARK_RATIO);
 
   return (
     <Box
       sx={{
         display: "inline-flex",
         alignItems: "center",
-        gap: compact ? 0 : 1.35,
         minWidth: 0,
         textDecoration: "none",
         color: "inherit",
       }}
     >
-      <Box
-        sx={{
-          width: size,
-          height: size,
-          flexShrink: 0,
-          display: "grid",
-          placeItems: "center",
-          position: "relative",
-        }}
-      >
+      {compact ? (
+        <Box
+          sx={{
+            width: size,
+            height: size,
+            flexShrink: 0,
+            display: "grid",
+            placeItems: "center",
+            position: "relative",
+          }}
+        >
+          <Image
+            key={markSrc}
+            src={markSrc}
+            alt={APP_NAME}
+            width={size}
+            height={size}
+            priority
+            unoptimized
+            style={{ objectFit: "contain", display: "block" }}
+          />
+        </Box>
+      ) : (
         <Image
-          key={src}
-          src={src}
-          alt="FundLookup"
-          width={size}
+          key={wordSrc}
+          src={wordSrc}
+          alt={APP_NAME}
+          width={wordWidth}
           height={size}
           priority
           unoptimized
-          style={{ objectFit: "contain", display: "block" }}
+          style={{ objectFit: "contain", display: "block", height: size, width: "auto", maxWidth: 200 }}
         />
-      </Box>
-      {!compact ? (
-        <Typography
-          component="span"
-          sx={{
-            color: "primary.main",
-            letterSpacing: "0.04em",
-            fontWeight: 800,
-            fontSize: size >= 36 ? 18 : 15,
-            lineHeight: 1,
-          }}
-        >
-          FundLookup
-        </Typography>
-      ) : null}
+      )}
     </Box>
   );
 }

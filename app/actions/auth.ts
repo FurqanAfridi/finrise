@@ -9,22 +9,41 @@ import bcrypt from "bcryptjs";
 import { signIn, signOut, auth } from "@/auth";
 import { createCompanyForUser, findExistingCompany } from "@/lib/company";
 import { prisma } from "@/lib/prisma";
-import { isPlatformAdminHost } from "@/lib/platform-host";
+import { isLocalDevHost, isPlatformAdminHost, platformAdminPublicUrl } from "@/lib/platform-host";
+import { APP_NAME } from "@/lib/brand";
 import { platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
 import { Role } from "@/lib/roles";
 import { TENANT_COOKIE } from "@/lib/tenant";
 import { formField, parseCompanyIdentity, parseEmail, parsePassword, parsePersonName } from "@/lib/validation";
 
 export async function loginAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "");
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
   const password = String(formData.get("password") ?? "");
   const callbackUrl = String(formData.get("callbackUrl") ?? "/dashboard");
+  const safeCallback = callbackUrl.startsWith("/") ? callbackUrl : "/dashboard";
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) redirect("/login?error=1");
+  const matches = await bcrypt.compare(password, user.passwordHash);
+  if (!matches) redirect("/login?error=1");
+
+  const host = (await headers()).get("host");
+  const dest =
+    user.role === Role.ADMIN
+      ? isPlatformAdminHost(host) || isLocalDevHost(host)
+        ? safeCallback.startsWith("/admin")
+          ? safeCallback
+          : "/admin"
+        : `${platformAdminPublicUrl()}/admin`
+      : safeCallback;
 
   try {
     await signIn("credentials", {
       email,
       password,
-      redirect: false,
+      redirectTo: dest,
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -32,14 +51,6 @@ export async function loginAction(formData: FormData) {
     }
     throw error;
   }
-
-  const session = await auth();
-  const host = (await headers()).get("host");
-  const safeCallback = callbackUrl.startsWith("/") ? callbackUrl : "/dashboard";
-  if (session?.user?.role === Role.ADMIN && (isPlatformAdminHost(host) || safeCallback === "/dashboard" || safeCallback === "/no-tenant")) {
-    redirect("/admin");
-  }
-  redirect(safeCallback);
 }
 
 export async function signupAction(_prev: { error?: string }, formData: FormData): Promise<{ error?: string }> {
@@ -149,18 +160,18 @@ export async function requestPasswordResetAction(
     if (platformMailReady()) {
       await sendPlatformMail({
         to: user.email,
-        subject: "Reset your FundLookup password",
+        subject: `Reset your ${APP_NAME} password`,
         text: [
-          "Reset your FundLookup password",
+          `Reset your ${APP_NAME} password`,
           "",
           "Use this link within the next hour:",
           resetUrl,
           "",
           "If you did not ask for this, you can ignore the email. Your password stays the same.",
           "",
-          `© ${year} FundLookup. Powered by Devdabs.`,
+          `© ${year} ${APP_NAME}. Powered by Devdabs.`,
         ].join("\n"),
-        html: `<p>Use this link within the next hour to choose a new password:</p><p><a href="${resetUrl}">Reset password</a></p><p>If you did not ask for this, you can ignore the email.</p><p style="color:#6B7785;font-size:12px;">© ${year} FundLookup. Powered by Devdabs.</p>`,
+        html: `<p>Use this link within the next hour to choose a new password:</p><p><a href="${resetUrl}">Reset password</a></p><p>If you did not ask for this, you can ignore the email.</p><p style="color:#6B7785;font-size:12px;">© ${year} ${APP_NAME}. Powered by Devdabs.</p>`,
       });
     }
   }

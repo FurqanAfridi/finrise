@@ -52,7 +52,7 @@ export default async function SettingsPage({
     return (
       <Box sx={{ maxWidth: 920 }}>
         <SettingsHashRedirect />
-        <PageHeader title="Profile" description="Your name and avatar across FundLookup." />
+        <PageHeader title="Profile" description="Your name and avatar across Fundlookup." />
         <SettingsTabs active={tab} tabs={visibleTabs} />
         <ProfileForm name={user?.name ?? null} email={user?.email ?? ctx.email} avatarKey={user?.avatarKey ?? null} />
       </Box>
@@ -263,7 +263,7 @@ export default async function SettingsPage({
       {tab === "team" ? (
         <>
           <InviteForm />
-          <SettingsSection title="People" description="Everyone who can open this company in Finrise.">
+          <SettingsSection title="People" description="Everyone who can open this company in Fundlookup.">
             {users.map((row) => (
               <SettingsPersonRow
                 key={row.id}
