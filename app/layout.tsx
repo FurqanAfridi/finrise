@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ThemeRegistry } from "@/components/theme-registry";
+import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "FINRISE",
-  description: "Buyer, publisher, and profit tracking for performance marketing.",
+  title: APP_NAME,
+  description: APP_TAGLINE,
   icons: {
     icon: [{ url: `/brand/logo-mark.png?v=20260813g`, type: "image/png" }],
     apple: [{ url: "/apple-icon.png" }],

@@ -1,21 +1,13 @@
-/** Host helpers for FinRise app vs platform admin subdomain. */
-
-export const APP_HOST = "fundlookup.co";
-export const PLATFORM_ADMIN_HOST = "admin.fundlookup.co";
-
-/** Production + local admin hosts. Legacy RidgeRise hosts kept during DNS cutover. */
-export const PLATFORM_ADMIN_HOSTS = new Set([
-  PLATFORM_ADMIN_HOST,
-  "finadmin.ridgerisemedia.com",
-  "localhost:3002",
-]);
-
-export const APP_HOSTS = new Set([
+import {
   APP_HOST,
-  `www.${APP_HOST}`,
-  "fin.ridgerisemedia.com",
-  "localhost",
-]);
+  LEGACY_ADMIN_HOSTS,
+  LEGACY_APP_HOSTS,
+  PLATFORM_ADMIN_HOST,
+} from "@/lib/brand";
+
+export { APP_HOST, PLATFORM_ADMIN_HOST };
+
+export const PLATFORM_ADMIN_HOSTS = new Set([PLATFORM_ADMIN_HOST, "localhost:3002"]);
 
 export function normalizeHost(host: string | null | undefined): string {
   return (host ?? "").split(":")[0]?.toLowerCase() || "";
@@ -24,7 +16,17 @@ export function normalizeHost(host: string | null | undefined): string {
 export function isPlatformAdminHost(host: string | null | undefined): boolean {
   const h = (host ?? "").toLowerCase();
   if (PLATFORM_ADMIN_HOSTS.has(h)) return true;
-  return PLATFORM_ADMIN_HOSTS.has(normalizeHost(host));
+  return normalizeHost(host) === PLATFORM_ADMIN_HOST;
+}
+
+export function isLegacyAppHost(host: string | null | undefined): boolean {
+  const bare = normalizeHost(host);
+  return (LEGACY_APP_HOSTS as readonly string[]).includes(bare);
+}
+
+export function isLegacyAdminHost(host: string | null | undefined): boolean {
+  const bare = normalizeHost(host);
+  return (LEGACY_ADMIN_HOSTS as readonly string[]).includes(bare);
 }
 
 export function platformAdminPublicUrl(): string {
@@ -39,12 +41,8 @@ export function platformAdminPublicUrl(): string {
         url.hostname = PLATFORM_ADMIN_HOST;
         return url.origin;
       }
-      if (url.hostname === "fin.ridgerisemedia.com") {
-        url.hostname = "finadmin.ridgerisemedia.com";
-        return url.origin;
-      }
     } catch {
-      // fall through to default
+      // fall through
     }
   }
 

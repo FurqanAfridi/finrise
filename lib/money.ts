@@ -1,5 +1,5 @@
 /**
- * Shared money formatting for FinRise.
+ * Shared money formatting.
  * Always use these helpers — never inline toFixed for currency.
  */
 

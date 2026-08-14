@@ -2,7 +2,7 @@
 
 import { createTheme, type PaletteMode, type Theme } from "@mui/material/styles";
 
-/** FinRise token values mirrored for MUI until full CSS-var migration. */
+/** Design tokens mirrored for MUI until full CSS-var migration. */
 const light = {
   background: "#FAFBFC",
   surface: "#FFFFFF",

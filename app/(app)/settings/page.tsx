@@ -52,7 +52,7 @@ export default async function SettingsPage({
     return (
       <Box sx={{ maxWidth: 920 }}>
         <SettingsHashRedirect />
-        <PageHeader title="Profile" description="Your name and avatar across FinRise." />
+        <PageHeader title="Profile" description="Your name and avatar across FundLookup." />
         <SettingsTabs active={tab} tabs={visibleTabs} />
         <ProfileForm name={user?.name ?? null} email={user?.email ?? ctx.email} avatarKey={user?.avatarKey ?? null} />
       </Box>

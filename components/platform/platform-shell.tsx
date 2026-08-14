@@ -24,6 +24,7 @@ import { useTheme } from "@mui/material/styles";
 import { IconMenu2, IconX } from "@tabler/icons-react";
 import { logoutAction } from "@/app/actions/auth";
 import { Logo } from "@/components/berry/logo";
+import { PoweredBy } from "@/components/powered-by";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAvatar } from "@/components/user-avatar";
 import { PLATFORM_NAV } from "@/lib/platform-nav";
@@ -58,7 +59,7 @@ export function PlatformShell({
   const displayName = name?.trim() || email || "Platform admin";
 
   const drawerContent = (collapsed: boolean) => (
-    <Box sx={{ pt: 1, px: collapsed ? 1 : 1.5, pb: 2 }}>
+    <Box sx={{ pt: 1, px: collapsed ? 1 : 1.5, pb: 2, display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <List disablePadding>
         {PLATFORM_NAV.map((item) => {
           const selected = isActive(pathname, item.href);
@@ -85,6 +86,11 @@ export function PlatformShell({
           );
         })}
       </List>
+      {!collapsed ? (
+        <Box sx={{ mt: "auto", pt: 2, px: 0.5 }}>
+          <PoweredBy compact />
+        </Box>
+      ) : null}
     </Box>
   );
 
@@ -144,7 +150,7 @@ export function PlatformShell({
               <IconMenu2 size={20} />
             </IconButton>
             <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 600 }}>
-              FinRise admin
+              FundLookup admin
             </Typography>
             <ThemeToggle />
             <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="Account menu">

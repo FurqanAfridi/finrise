@@ -2,11 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { randomBytes } from "node:crypto";
 import { AuthError } from "next-auth";
 import bcrypt from "bcryptjs";
 import { signIn, signOut } from "@/auth";
 import { createCompanyForUser, findExistingCompany } from "@/lib/company";
 import { prisma } from "@/lib/prisma";
+import { platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
 import { TENANT_COOKIE } from "@/lib/tenant";
 import { formField, parseCompanyIdentity, parseEmail, parsePassword, parsePersonName } from "@/lib/validation";
 
@@ -110,4 +112,75 @@ export async function signupAction(_prev: { error?: string }, formData: FormData
 
 export async function logoutAction() {
   await signOut({ redirectTo: "/login" });
+}
+
+export async function requestPasswordResetAction(
+  _prev: { error?: string; ok?: boolean },
+  formData: FormData,
+): Promise<{ error?: string; ok?: boolean }> {
+  const email = parseEmail(formField(formData, "email"), true);
+  if (!email.ok || !email.value) return { error: email.ok ? "Enter the email for your account." : email.error };
+
+  const user = await prisma.user.findUnique({ where: { email: email.value } });
+  if (user) {
+    await prisma.passwordReset.updateMany({
+      where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { expiresAt: new Date() },
+    });
+    const token = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await prisma.passwordReset.create({
+      data: { userId: user.id, token, expiresAt },
+    });
+    const site = (process.env.AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    const resetUrl = `${site}/reset-password/${token}`;
+    const year = new Date().getFullYear();
+    if (platformMailReady()) {
+      await sendPlatformMail({
+        to: user.email,
+        subject: "Reset your FundLookup password",
+        text: [
+          "Reset your FundLookup password",
+          "",
+          "Use this link within the next hour:",
+          resetUrl,
+          "",
+          "If you did not ask for this, you can ignore the email. Your password stays the same.",
+          "",
+          `© ${year} FundLookup. Powered by Devdabs.`,
+        ].join("\n"),
+        html: `<p>Use this link within the next hour to choose a new password:</p><p><a href="${resetUrl}">Reset password</a></p><p>If you did not ask for this, you can ignore the email.</p><p style="color:#6B7785;font-size:12px;">© ${year} FundLookup. Powered by Devdabs.</p>`,
+      });
+    }
+  }
+
+  return { ok: true };
+}
+
+export async function completePasswordResetAction(
+  _prev: { error?: string; ok?: boolean },
+  formData: FormData,
+): Promise<{ error?: string; ok?: boolean }> {
+  const token = formField(formData, "token");
+  const password = parsePassword(String(formData.get("password") ?? ""), String(formData.get("confirmPassword") ?? ""));
+  if (!token) return { error: "This reset link is missing. Request a new one from the sign-in page." };
+  if (!password.ok) return { error: password.error };
+
+  const row = await prisma.passwordReset.findUnique({ where: { token } });
+  if (!row || row.usedAt || row.expiresAt < new Date()) {
+    return { error: "This reset link is invalid or has expired. Request a new one." };
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: row.userId },
+      data: { passwordHash: await bcrypt.hash(password.value, 12) },
+    }),
+    prisma.passwordReset.update({
+      where: { id: row.id },
+      data: { usedAt: new Date() },
+    }),
+  ]);
+
+  return { ok: true };
 }

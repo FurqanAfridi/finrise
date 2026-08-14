@@ -66,7 +66,7 @@ export async function platformInviteAdmin(
   const inviteUrl = `${platformAdminPublicUrl()}/invite/${token}`;
   const content = inviteEmailContent({
     inviteeEmail: email.value,
-    companyName: "FinRise platform",
+    companyName: "FundLookup platform",
     inviterName: session.user.name ?? null,
     inviterEmail: session.user.email ?? null,
     tenantRole: TenantRole.ADMIN,

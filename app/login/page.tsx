@@ -9,6 +9,7 @@ import Typography from "@mui/material/Typography";
 import { loginAction } from "@/app/actions/auth";
 import { Logo } from "@/components/berry/logo";
 import { MainCard } from "@/components/berry/main-card";
+import { PoweredBy } from "@/components/powered-by";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { isPlatformAdminHost } from "@/lib/platform-host";
 
@@ -62,6 +63,11 @@ export default async function LoginPage({
               <Button color="secondary" fullWidth size="large" type="submit" variant="contained">
                 Sign In
               </Button>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ textAlign: "center" }}>
+                <Link href="/forgot-password" style={{ color: "inherit", fontWeight: 600 }}>
+                  Forgot password?
+                </Link>
+              </Typography>
             </Box>
             {!adminHost ? (
               <>
@@ -78,6 +84,7 @@ export default async function LoginPage({
                 No public signup on this site. Use an invite link from the platform owner.
               </Typography>
             )}
+            <PoweredBy />
           </Stack>
         </Box>
       </MainCard>

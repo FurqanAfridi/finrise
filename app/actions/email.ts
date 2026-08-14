@@ -339,9 +339,9 @@ export async function sendPublisherInvoiceToCompanyAction(
     invoice.periodLabel ? `Period: ${invoice.periodLabel}` : null,
     invoice.dueDate ? `Due: ${invoice.dueDate.toISOString().slice(0, 10)}` : null,
     "",
-    `Open in FinRise: ${href}`,
+    `Open in FundLookup: ${href}`,
     "",
-    `Sent via FinRise from ${INVITE_FROM_EMAIL} on behalf of ${publisherName}.`,
+    `Sent via FundLookup from ${INVITE_FROM_EMAIL} on behalf of ${publisherName}.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -355,7 +355,7 @@ export async function sendPublisherInvoiceToCompanyAction(
       ${invoice.periodLabel ? `<li>Period: ${escapeHtml(invoice.periodLabel)}</li>` : ""}
       ${invoice.dueDate ? `<li>Due: ${escapeHtml(invoice.dueDate.toISOString().slice(0, 10))}</li>` : ""}
     </ul>
-    <p><a href="${escapeHtml(href)}">Review this payable in FinRise</a></p>
+    <p><a href="${escapeHtml(href)}">Review this payable in FundLookup</a></p>
     <p style="color:#6B7785;font-size:12px;">Sent from ${escapeHtml(INVITE_FROM_EMAIL)} with reference to ${escapeHtml(publisherName)}.</p>
   `;
 

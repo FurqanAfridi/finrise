@@ -39,7 +39,7 @@ export function Logo({ compact = false, size = 34 }: { compact?: boolean; size?:
         <Image
           key={src}
           src={src}
-          alt="FINRISE"
+          alt="FundLookup"
           width={size}
           height={size}
           priority
@@ -52,14 +52,13 @@ export function Logo({ compact = false, size = 34 }: { compact?: boolean; size?:
           component="span"
           sx={{
             color: "primary.main",
-            letterSpacing: "0.12em",
+            letterSpacing: "0.04em",
             fontWeight: 800,
             fontSize: size >= 36 ? 18 : 15,
             lineHeight: 1,
-            textTransform: "uppercase",
           }}
         >
-          FINRISE
+          FundLookup
         </Typography>
       ) : null}
     </Box>

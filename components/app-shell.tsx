@@ -28,6 +28,7 @@ import { IconBell, IconChevronDown, IconMenu2, IconX } from "@tabler/icons-react
 import { logoutAction } from "@/app/actions/auth";
 import { switchTenantAction } from "@/app/actions/ops";
 import { Logo } from "@/components/berry/logo";
+import { PoweredBy } from "@/components/powered-by";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAvatar } from "@/components/user-avatar";
 import { getMobileNav, getNavSections } from "@/lib/nav";
@@ -84,7 +85,7 @@ export function AppShell({
   const displayName = name?.trim() || email || "Account";
 
   const drawerContent = (collapsed: boolean) => (
-    <Box sx={{ pt: 1, px: collapsed ? 1 : 1.5, pb: 2 }}>
+    <Box sx={{ pt: 1, px: collapsed ? 1 : 1.5, pb: 2, display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <List disablePadding>
         {sections.map((section) => (
           <Box key={section.label} sx={{ mb: 1 }}>
@@ -144,6 +145,11 @@ export function AppShell({
           </Box>
         ))}
       </List>
+      {!collapsed ? (
+        <Box sx={{ mt: "auto", pt: 2, px: 0.5 }}>
+          <PoweredBy compact />
+        </Box>
+      ) : null}
     </Box>
   );
 

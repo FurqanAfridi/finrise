@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 import { acceptInvite } from "@/app/actions/ops";
 import { Logo } from "@/components/berry/logo";
 import { MainCard } from "@/components/berry/main-card";
+import { PoweredBy } from "@/components/powered-by";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/roles";
@@ -51,7 +52,7 @@ export default async function InvitePage({
                 <Typography variant="body2" color="text.secondary">
                   {platformInvite ? (
                     <>
-                      Join the FinRise <strong>platform admin</strong> team as <strong>{invite.email}</strong>. You will
+                      Join the FundLookup <strong>platform admin</strong> team as <strong>{invite.email}</strong>. You will
                       manage companies and data across the platform.
                     </>
                   ) : (
@@ -75,6 +76,7 @@ export default async function InvitePage({
                 </Button>
               </Box>
             )}
+            <PoweredBy />
           </Stack>
         </Box>
       </MainCard>

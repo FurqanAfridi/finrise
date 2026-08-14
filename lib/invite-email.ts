@@ -1,5 +1,6 @@
 import { TENANT_ROLE_LABEL } from "@/lib/status";
 import type { TenantRole } from "@prisma/client";
+import { APP_NAME } from "@/lib/brand";
 import { INVITE_FROM_EMAIL, INVITE_FROM_NAME } from "@/lib/platform-mail";
 
 function escapeHtml(value: string) {
@@ -37,7 +38,7 @@ export function inviteEmailContent(input: {
     input.inviterName?.trim() ||
     input.inviterEmail?.trim() ||
     "A teammate";
-  const company = input.companyName.trim() || "FINRISE";
+  const company = input.companyName.trim() || APP_NAME;
   const hiName = greetingName(input.inviteeEmail, input.inviterName);
   const expires = input.expiresAt.toLocaleDateString(undefined, {
     year: "numeric",
@@ -50,19 +51,19 @@ export function inviteEmailContent(input: {
   const markUrl = `${site}/brand/logo-mark.png?v=20260813g`;
   const privacyUrl = `${brandSite}/privacy`;
   const termsUrl = `${brandSite}/terms`;
-  const helpUrl = `mailto:${INVITE_FROM_EMAIL}?subject=${encodeURIComponent("FINRISE help")}`;
-  const unsubUrl = `mailto:${INVITE_FROM_EMAIL}?subject=${encodeURIComponent("Unsubscribe from FINRISE emails")}`;
+  const helpUrl = `mailto:${INVITE_FROM_EMAIL}?subject=${encodeURIComponent("FundLookup help")}`;
+  const unsubUrl = `mailto:${INVITE_FROM_EMAIL}?subject=${encodeURIComponent("Unsubscribe from FundLookup emails")}`;
 
-  const subject = `Welcome to ${company} on FINRISE`;
+  const subject = `Welcome to ${company} on FundLookup`;
 
   const text = [
     "Finance clarity for every campaign",
     "",
     `Hi ${hiName},`,
     "",
-    `Welcome to FINRISE! ${inviter} invited you to join ${company} as ${roleLabel}. We are glad to have you on the workspace.`,
+    `Welcome to FundLookup! ${inviter} invited you to join ${company} as ${roleLabel}. We are glad to have you on the workspace.`,
     "",
-    "FINRISE helps brokers, publishers, and buyers keep invoices, payouts, and profit in one calm place — so your team can focus on the work that grows the business.",
+    "FundLookup helps brokers, publishers, and buyers keep invoices, payouts, and profit in one calm place — so your team can focus on the work that grows the business.",
     "",
     "To get started, accept your invitation and take a few minutes to explore the dashboard, invoices, and settings for your company.",
     "",
@@ -71,15 +72,15 @@ export function inviteEmailContent(input: {
     "",
     "We are committed to giving you a clear, reliable experience. If you need help at any point, reply to this email — our team is ready to assist.",
     "",
-    "Thank you for choosing FINRISE. We look forward to working with you.",
+    "Thank you for choosing FundLookup. We look forward to working with you.",
     "",
     "Best regards,",
-    "The FINRISE team",
+    "The FundLookup team",
     INVITE_FROM_NAME,
     "",
-    `© ${year} FINRISE. All rights reserved.`,
+    `© ${year} FundLookup. All rights reserved.`,
     "",
-    `You are receiving this email because you were invited to join the FINRISE platform as a ${roleLabel} for ${company}. By accepting, you agree to our Terms of use and Privacy policy.`,
+    `You are receiving this email because you were invited to join the FundLookup platform as a ${roleLabel} for ${company}. By accepting, you agree to our Terms of use and Privacy policy.`,
     `Privacy: ${privacyUrl}`,
     `Terms: ${termsUrl}`,
     `Help: ${INVITE_FROM_EMAIL}`,
@@ -103,10 +104,10 @@ export function inviteEmailContent(input: {
               <table role="presentation" cellspacing="0" cellpadding="0">
                 <tr>
                   <td style="vertical-align:middle;padding-right:10px;">
-                    <img src="${escapeHtml(markUrl)}" width="36" height="36" alt="FINRISE" style="display:block;border:0;" />
+                    <img src="${escapeHtml(markUrl)}" width="36" height="36" alt="FundLookup" style="display:block;border:0;" />
                   </td>
-                  <td style="vertical-align:middle;font-size:15px;font-weight:800;letter-spacing:0.08em;color:#366450;text-transform:uppercase;">
-                    FINRISE
+                  <td style="vertical-align:middle;font-size:15px;font-weight:800;letter-spacing:0.04em;color:#366450;">
+                    FundLookup
                   </td>
                 </tr>
               </table>
@@ -133,7 +134,7 @@ export function inviteEmailContent(input: {
                       Hi ${escapeHtml(hiName)},
                     </p>
                     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#3A4553;">
-                      Welcome to <strong style="color:#1B2430;">FINRISE</strong>! ${escapeHtml(inviter)} invited you to join
+                      Welcome to <strong style="color:#1B2430;">FundLookup</strong>! ${escapeHtml(inviter)} invited you to join
                       <strong style="color:#1B2430;">${escapeHtml(company)}</strong> as
                       <strong style="color:#1B2430;">${escapeHtml(roleLabel)}</strong>. We are thrilled to have you on the team.
                     </p>
@@ -159,12 +160,12 @@ export function inviteEmailContent(input: {
                       We are committed to giving you a calm, reliable experience. If you need help at any point, reply to this email — our support team is ready to assist.
                     </p>
                     <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#3A4553;">
-                      Thank you for choosing FINRISE. We look forward to working with you.
+                      Thank you for choosing FundLookup. We look forward to working with you.
                     </p>
 
                     <p style="margin:0;font-size:15px;line-height:1.7;color:#1B2430;">
                       Best regards,<br />
-                      <strong>The FINRISE team</strong><br />
+                      <strong>The FundLookup team</strong><br />
                       <span style="color:#6B7785;font-size:13px;">${escapeHtml(INVITE_FROM_NAME)} · ${escapeHtml(INVITE_FROM_EMAIL)}</span>
                     </p>
                   </td>
@@ -176,10 +177,10 @@ export function inviteEmailContent(input: {
           <tr>
             <td style="padding:28px 12px 8px;text-align:center;">
               <p style="margin:0 0 12px;font-size:12px;line-height:1.5;color:#8A94A1;">
-                © ${year} FINRISE. All rights reserved.
+                © ${year} FundLookup. All rights reserved.
               </p>
               <p style="margin:0 0 18px;font-size:12px;line-height:1.65;color:#8A94A1;max-width:520px;margin-left:auto;margin-right:auto;">
-                You are receiving this email because you were invited to join the FINRISE platform as a ${escapeHtml(roleLabel)} for ${escapeHtml(company)}. Accepting this invitation also means you agree to our Terms of use and Privacy policy. If you no longer want to receive emails from us, use the unsubscribe link below.
+                You are receiving this email because you were invited to join the FundLookup platform as a ${escapeHtml(roleLabel)} for ${escapeHtml(company)}. Accepting this invitation also means you agree to our Terms of use and Privacy policy. If you no longer want to receive emails from us, use the unsubscribe link below.
               </p>
               <p style="margin:0;font-size:12px;line-height:1.8;">
                 <a href="${escapeHtml(privacyUrl)}" style="color:#366450;text-decoration:none;margin:0 8px;">Privacy policy</a>

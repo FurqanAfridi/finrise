@@ -59,7 +59,7 @@ export default async function PlatformAdminHome() {
     <>
       <PageHeader
         title="Platform overview"
-        description="Manage every company, user, and invoice across FinRise. Invite-only — no public signup on this admin site."
+        description="Manage every company, user, and invoice across FundLookup. Invite-only — no public signup on this admin site."
       />
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 3 }}>

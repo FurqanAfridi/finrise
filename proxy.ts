@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { isPlatformAdminHost } from "@/lib/platform-host";
+import { APP_HOST, PLATFORM_ADMIN_HOST } from "@/lib/brand";
+import { isLegacyAdminHost, isLegacyAppHost, isPlatformAdminHost } from "@/lib/platform-host";
 
-export const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/api/auth"];
+export const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/forgot-password", "/reset-password", "/api/auth"];
 
 function hasSession(request: NextRequest) {
   return Boolean(
@@ -21,8 +22,17 @@ function isPublicPath(pathname: string, adminHost: boolean) {
 }
 
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const adminHost = isPlatformAdminHost(request.headers.get("host"));
+  const host = request.headers.get("host");
+  const { pathname, search } = request.nextUrl;
+
+  if (isLegacyAppHost(host)) {
+    return NextResponse.redirect(`https://${APP_HOST}${pathname}${search}`, 308);
+  }
+  if (isLegacyAdminHost(host)) {
+    return NextResponse.redirect(`https://${PLATFORM_ADMIN_HOST}${pathname}${search}`, 308);
+  }
+
+  const adminHost = isPlatformAdminHost(host);
   const session = hasSession(request);
   const isPublic = isPublicPath(pathname, adminHost);
 
@@ -63,7 +73,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  if (session && (pathname === "/login" || pathname === "/signup")) {
+  if (session && (pathname === "/login" || pathname === "/signup" || pathname === "/forgot-password" || pathname.startsWith("/reset-password"))) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
