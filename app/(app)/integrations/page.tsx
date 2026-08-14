@@ -28,6 +28,11 @@ export default async function IntegrationsPage({
       ? "Google Sheets is not configured on this server yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."
       : error;
 
+  const googleSectionDescription = `Connect once, then pick a spreadsheet and label each column. ${APP_NAME} only reads the sheets you choose. This follows Google Limited Use rules. See the privacy policy for details.`;
+  const googleAccountHint = configured
+    ? "Uses Google sign-in. You can disconnect at any time."
+    : `Ask whoever hosts ${APP_NAME} to set the Google client ID and secret.`;
+
   return (
     <Box sx={{ maxWidth: 920 }}>
       <PageHeader
@@ -48,15 +53,11 @@ export default async function IntegrationsPage({
 
       <SettingsSection
         title="Google Sheets"
-        description={`Connect once, then pick a spreadsheet and label each column. ${APP_NAME} only reads the sheets you choose. This follows Google Limited Use rules. See the privacy policy for details.`}
+        description={googleSectionDescription}
       >
         <SettingsRow
           label="Account"
-          hint={
-            configured
-              ? "Uses Google sign-in. You can disconnect at any time."
-              : `Ask whoever hosts ${APP_NAME} to set the Google client ID and secret.`}
-          }
+          hint={googleAccountHint}
           action={
             connection ? (
               <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
