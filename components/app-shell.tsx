@@ -436,6 +436,7 @@ export function AppShell({
         sx={{
           flexGrow: 1,
           width: { md: `calc(100% - ${sidebarWidth}px)` },
+          minWidth: 0,
           mt: "64px",
           mb: { xs: "64px", md: 0 },
           minHeight: { xs: "calc(100vh - 128px)", md: "calc(100vh - 64px)" },
@@ -446,9 +447,10 @@ export function AppShell({
           sx={{
             maxWidth: contentMaxWidth,
             mx: "auto",
-            px: { xs: 2, md: 3 },
+            px: { xs: 2, md: 3, xl: 4 },
             py: { xs: 2.5, md: 3 },
             width: "100%",
+            minWidth: 0,
           }}
         >
           {children}

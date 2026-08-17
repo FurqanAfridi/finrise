@@ -43,7 +43,11 @@ export default function PrivacyPage() {
         </p>
         <ul style={{ ...legalP, paddingLeft: 20 }}>
           <li>spreadsheets.readonly: read cell values from a spreadsheet you pick</li>
-          <li>drive.metadata.readonly: list spreadsheet names and ids so you can choose a file</li>
+          <li>
+            drive.metadata.readonly: list spreadsheet names and ids so you can choose a file. This does not grant
+            access to Google Docs, Photos, or other Drive file types, and it does not let us read a spreadsheet until
+            you select it in {APP_NAME}
+          </li>
           <li>userinfo.email: show which Google account is connected</li>
         </ul>
         <p style={legalP}>
@@ -97,9 +101,14 @@ export default function PrivacyPage() {
         <p style={legalP}>
           Ledger data stays until your company deletes records or the account is closed. To disconnect Google, open
           Integrations in the app and choose Disconnect. That removes the stored Google refresh token and email from
-          our database. Previously imported invoices are not automatically deleted; you can delete those in {APP_NAME}
-          like other records. To request deletion of a company or account, email {SUPPORT_EMAIL} from the address on
-          the account.
+          our database. You can also revoke {APP_NAME} under Google Account permissions. Previously imported invoices
+          are not automatically deleted; you can delete those in {APP_NAME} like other records. Step-by-step
+          instructions:{" "}
+          <Link href="/data-deletion" style={{ color: "var(--fr-primary)", fontWeight: 600 }}>
+            How to delete your data
+          </Link>
+          . To request deletion of a company or account, email {SUPPORT_EMAIL} from the address on the account. We aim
+          to complete those requests within 30 days.
         </p>
 
         <h2 style={legalH2}>Security</h2>
@@ -137,9 +146,13 @@ export default function PrivacyPage() {
           <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: "var(--fr-primary)", fontWeight: 600 }}>
             {SUPPORT_EMAIL}
           </a>
-          . Related:{" "}
+          .           Related:{" "}
           <Link href="/terms" style={{ color: "var(--fr-primary)", fontWeight: 600 }}>
             Terms of service
+          </Link>
+          {" · "}
+          <Link href="/data-deletion" style={{ color: "var(--fr-primary)", fontWeight: 600 }}>
+            How to delete your data
           </Link>
           .
         </p>

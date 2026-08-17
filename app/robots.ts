@@ -10,7 +10,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     return {
       rules: {
         userAgent: "*",
-        allow: ["/", "/privacy", "/terms"],
+        allow: ["/", "/privacy", "/terms", "/data-deletion"],
         disallow: ["/api/", "/dashboard", "/admin", "/login", "/signup"],
       },
       sitemap,
@@ -20,7 +20,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   return {
     rules: {
       userAgent: "*",
-      allow: ["/privacy", "/terms"],
+      allow: ["/privacy", "/terms", "/data-deletion"],
       disallow: "/",
     },
     sitemap,

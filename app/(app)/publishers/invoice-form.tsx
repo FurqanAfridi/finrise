@@ -29,6 +29,8 @@ type Invoice = {
   amount?: unknown;
   invoiceNumber?: string | null;
   terms?: string | null;
+  invoiceDate?: Date | null;
+  transactionAmount?: unknown;
   payable?: unknown;
   paid?: unknown;
   paidAt?: Date | null;
@@ -86,10 +88,11 @@ export function PublisherInvoiceForm({
         <TextInput label="Invoice number" name="invoiceNumber" defaultValue={invoice?.invoiceNumber ?? ""} />
         <TextInput label="Month label" name="monthLabel" defaultValue={invoice?.monthLabel ?? ""} />
         <TextInput label="Week label" name="weekLabel" defaultValue={invoice?.weekLabel ?? ""} />
-        <TextInput label="Period label" name="periodLabel" defaultValue={invoice?.periodLabel ?? ""} />
+        <TextInput label="Date range" name="periodLabel" defaultValue={invoice?.periodLabel ?? ""} />
+        <TextInput label="Date" name="invoiceDate" type="date" defaultValue={isoDate(invoice?.invoiceDate ?? invoice?.periodStart)} />
+        <TextInput label="Due date" name="dueDate" type="date" defaultValue={isoDate(invoice?.dueDate)} />
         <TextInput label="Period start" name="periodStart" type="date" defaultValue={isoDate(invoice?.periodStart)} />
         <TextInput label="Period end" name="periodEnd" type="date" defaultValue={isoDate(invoice?.periodEnd)} />
-        <TextInput label="Due date" name="dueDate" type="date" defaultValue={isoDate(invoice?.dueDate)} />
 
         <InvoiceLineFields
           totalName="amount"
@@ -106,9 +109,17 @@ export function PublisherInvoiceForm({
         {!lockedPublisherId ? (
           <>
             <TextInput
-              label="Paid"
+              label="Amount paid"
               name="paid"
               defaultValue={invoice?.paid == null ? "" : String(num(invoice.paid))}
+              kind="decimal"
+              maxDecimals={2}
+              min={0}
+            />
+            <TextInput
+              label="Transaction amount"
+              name="transactionAmount"
+              defaultValue={invoice?.transactionAmount == null ? "" : String(num(invoice.transactionAmount))}
               kind="decimal"
               maxDecimals={2}
               min={0}

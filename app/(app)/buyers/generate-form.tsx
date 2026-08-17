@@ -15,6 +15,7 @@ import { WizardSteps } from "@/components/shared/wizard-steps";
 import { formatMoney } from "@/lib/money";
 import { isoDate } from "@/lib/dates";
 import { RATE_TYPE_LABEL } from "@/lib/status";
+import type { ContactVerticalOffer } from "@/lib/contact-verticals";
 
 type BuyerOption = {
   id: string;
@@ -31,11 +32,13 @@ const STEPS = ["Buyer", "Amount", "Dates", "Review"];
 export function GenerateInvoiceForm({
   buyers,
   verticals,
+  buyerVerticalOffers,
   nextNumber,
   defaultNetDays,
 }: {
   buyers: BuyerOption[];
   verticals: { id: string; name: string }[];
+  buyerVerticalOffers: Record<string, ContactVerticalOffer[]>;
   nextNumber: string;
   defaultNetDays: number;
 }) {
@@ -63,6 +66,14 @@ export function GenerateInvoiceForm({
   const netDaysDefault = buyer?.defaultPaymentTermsDays ?? defaultNetDays ?? 7;
   const [netDays, setNetDays] = useState(String(netDaysDefault));
   const verticalName = verticals.find((row) => row.id === verticalId)?.name;
+
+  function applyVerticalDefaults(nextBuyerId: string, nextVerticalId: string) {
+    const offer = buyerVerticalOffers[nextBuyerId]?.find((row) => row.verticalId === nextVerticalId);
+    if (!offer) return;
+    setNetDays(String(offer.paymentTermsDays));
+    if (offer.rate != null) setRate(String(offer.rate));
+    setRateType(offer.rateType);
+  }
 
   const computedAmount = useMemo(() => {
     const count = Number(leadCount || 0);
@@ -132,6 +143,8 @@ export function GenerateInvoiceForm({
                 setEmail(nextBuyer?.email ?? "");
                 setAddress(nextBuyer?.address ?? "");
                 setNetDays(String(nextBuyer?.defaultPaymentTermsDays ?? defaultNetDays ?? 7));
+                setVerticalId("");
+                setRate("");
               }}
               slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
             >
@@ -175,7 +188,11 @@ export function GenerateInvoiceForm({
                 fullWidth
                 label="Vertical"
                 value={verticalId}
-                onChange={(e) => setVerticalId(e.target.value)}
+                onChange={(e) => {
+                  const nextVerticalId = e.target.value;
+                  setVerticalId(nextVerticalId);
+                  if (nextVerticalId) applyVerticalDefaults(buyerId, nextVerticalId);
+                }}
                 slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
               >
                 <option value="">None</option>

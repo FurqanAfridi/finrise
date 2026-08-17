@@ -1,6 +1,7 @@
 import type { TenantRole } from "@prisma/client";
 import {
   IconAddressBook,
+  IconCalendarStats,
   IconCash,
   IconChartBar,
   IconDashboard,
@@ -68,6 +69,7 @@ export function getNavSections(role?: TenantRole): NavSection[] {
         { href: "/dashboard", label: "Dashboard", icon: IconDashboard, roles: BROKER_ROLES, mobilePrimary: true },
         { href: "/buyers", label: "Invoices", icon: IconReceipt2, roles: BROKER_ROLES, mobilePrimary: true },
         { href: "/publishers", label: "Payables", icon: IconTruckDelivery, roles: BROKER_ROLES, mobilePrimary: true },
+        { href: "/figures", label: "Daily figures", icon: IconCalendarStats, roles: BROKER_ROLES },
         { href: "/directory", label: "Contacts", icon: IconAddressBook, roles: BROKER_ROLES },
         { href: "/expenses", label: "Expenses", icon: IconWallet, roles: BROKER_ROLES },
         { href: "/reports", label: "Reports", icon: IconChartBar, roles: BROKER_ROLES, mobilePrimary: true },

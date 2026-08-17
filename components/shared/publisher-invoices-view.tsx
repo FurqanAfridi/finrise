@@ -36,6 +36,7 @@ export type PublisherInvoiceRow = {
   varianceFlagged: boolean;
   paymentStatus: PaymentStatus;
   paidApprovalStatus: PaidApprovalStatus | null;
+  isDraft?: boolean;
 };
 
 function DrawerRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -132,6 +133,7 @@ export function PublisherInvoicesView({
                   <TableCell>
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", gap: 0.5 }}>
                       <StatusPill paymentStatus={row.paymentStatus} />
+                      {row.isDraft ? <StatusPill kind="draft" /> : null}
                       {row.paidApprovalStatus === PaidApprovalStatus.PENDING ? (
                         <StatusPill kind="pending_approval" />
                       ) : null}
@@ -190,6 +192,7 @@ export function PublisherInvoicesView({
               </Typography>
               <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.5 }}>
                 <StatusPill paymentStatus={row.paymentStatus} />
+                {row.isDraft ? <StatusPill kind="draft" /> : null}
                 {row.paidApprovalStatus === PaidApprovalStatus.PENDING ? (
                   <StatusPill kind="pending_approval" />
                 ) : null}
@@ -209,6 +212,7 @@ export function PublisherInvoicesView({
           <Stack spacing={2}>
             <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75 }}>
               <StatusPill paymentStatus={selected.paymentStatus} />
+              {selected.isDraft ? <StatusPill kind="draft" /> : null}
               {selected.paidApprovalStatus === PaidApprovalStatus.PENDING ? (
                 <StatusPill kind="pending_approval" />
               ) : null}

@@ -166,3 +166,16 @@ export async function nextBuyerInvoiceNumber(tenantId: string) {
   const next = (Number.parseInt(current, 10) || 0) + 1;
   return `${prefix}${String(next).padStart(4, "0")}`;
 }
+
+export async function nextPublisherInvoiceNumber(tenantId: string) {
+  const year = new Date().getUTCFullYear();
+  const prefix = `PAY-${year}-`;
+  const latest = await prisma.publisherInvoice.findFirst({
+    where: { tenantId, invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: "desc" },
+    select: { invoiceNumber: true },
+  });
+  const current = latest?.invoiceNumber?.slice(prefix.length) ?? "0";
+  const next = (Number.parseInt(current, 10) || 0) + 1;
+  return `${prefix}${String(next).padStart(4, "0")}`;
+}

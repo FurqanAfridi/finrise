@@ -10,6 +10,7 @@ import { invoiceVariance } from "@/lib/finance/variance";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { nextBuyerInvoiceNumber } from "@/lib/company-branding";
+import { applyBuyerVerticalDefaults, applyPublisherVerticalDefaults } from "@/lib/contact-verticals";
 import { lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
 import {
   formField,
@@ -74,30 +75,51 @@ export async function upsertBuyerInvoice(
     : null;
   if (id && !existing) return { error: "Invoice not found." };
 
-  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), RateType.CPL);
+  const verticalId = str(formData, "verticalId");
+  const verticalDefaults = await applyBuyerVerticalDefaults({
+    tenantId: ctx.tenantId,
+    buyerId,
+    verticalId,
+    fallbackTermsDays: buyer.defaultPaymentTermsDays ?? 7,
+    fallbackTerms: buyer.defaultTerms,
+  });
+
+  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), verticalDefaults.rateType);
   const leadCount = dec(formData, "leadCount");
-  const rate = dec(formData, "rate");
+  let rate = dec(formData, "rate");
+  if ((rate == null || Number.isNaN(rate)) && verticalDefaults.rate != null) {
+    rate = verticalDefaults.rate;
+  }
   const revenueInput = dec(formData, "revenue");
   const receivableInput = dec(formData, "receivable");
   const received = dec(formData, "received");
+  const bankCredit = dec(formData, "bankCredit");
   const paymentTermsDaysInput = dec(formData, "paymentTermsDays");
-  if (hasInvalidNumber(leadCount, rate, revenueInput, receivableInput, received, paymentTermsDaysInput)) return { error: "Check the amounts and try again." };
+  if (hasInvalidNumber(leadCount, rate, revenueInput, receivableInput, received, bankCredit, paymentTermsDaysInput)) {
+    return { error: "Check the amounts and try again." };
+  }
   const computed = lineTotal(rateType, leadCount, rate, revenueInput);
   const revenue = revenueInput ?? computed.toNumber();
   const receivable = receivableInput ?? revenue;
   const paymentTermsDays =
-    paymentTermsDaysInput ?? buyer.defaultPaymentTermsDays ?? 7;
-  const terms = formatNetTerms(paymentTermsDays);
+    paymentTermsDaysInput ?? verticalDefaults.paymentTermsDays ?? buyer.defaultPaymentTermsDays ?? 7;
+  const termsInput = str(formData, "terms");
+  const terms = termsInput ?? verticalDefaults.terms ?? formatNetTerms(paymentTermsDays);
   const periodEnd = date(formData, "periodEnd");
   const periodStart = date(formData, "periodStart");
+  const invoiceDate = date(formData, "invoiceDate") ?? periodStart ?? periodEnd ?? existing?.invoiceDate ?? null;
   const due =
     date(formData, "dueDate") ??
-    (periodEnd || periodStart ? dueDate(periodEnd ?? periodStart ?? new Date(), paymentTermsDays) : null);
+    (invoiceDate || periodEnd || periodStart
+      ? dueDate(invoiceDate ?? periodEnd ?? periodStart ?? new Date(), paymentTermsDays)
+      : null);
 
   const closed = invoiceLockError(
+    invoiceDate,
     periodStart,
     periodEnd,
     due,
+    existing?.invoiceDate,
     existing?.periodStart,
     existing?.periodEnd,
     existing?.dueDate,
@@ -107,10 +129,11 @@ export async function upsertBuyerInvoice(
   const data = {
     tenantId: ctx.tenantId,
     buyerId,
-    verticalId: str(formData, "verticalId"),
+    verticalId,
     periodLabel: str(formData, "periodLabel"),
     periodStart,
     periodEnd,
+    invoiceDate,
     dueDate: due,
     leadCount,
     countLabel: str(formData, "countLabel"),
@@ -125,6 +148,7 @@ export async function upsertBuyerInvoice(
     invoiceStatus: enumValue(str(formData, "invoiceStatus"), Object.values(InvoiceStatus), InvoiceStatus.NOT_SENT),
     receivable,
     received,
+    bankCredit,
     paidAt: date(formData, "paidAt"),
     paymentMethod: str(formData, "paymentMethod"),
     comments: str(formData, "comments"),
@@ -213,11 +237,23 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   const buyerContact = parseOptionalPersonName(formField(formData, "buyerContact"), "Contact name");
   if (!buyerContact.ok) return { error: buyerContact.error };
   const buyerAddress = str(formData, "buyerAddress") ?? buyer.address;
+  const verticalId = str(formData, "verticalId");
+  const verticalDefaults = await applyBuyerVerticalDefaults({
+    tenantId: ctx.tenantId,
+    buyerId,
+    verticalId,
+    fallbackTermsDays: buyer.defaultPaymentTermsDays ?? 7,
+    fallbackTerms: buyer.defaultTerms,
+  });
 
   const leadCount = parseInteger(formField(formData, "leadCount"), "Quantity", 0, 1_000_000, false);
   if (!leadCount.ok) return { error: leadCount.error };
-  const rate = parseMoney(formField(formData, "rate"), "Rate", false);
-  if (!rate.ok) return { error: rate.error };
+  const rateParsed = parseMoney(formField(formData, "rate"), "Rate", false);
+  if (!rateParsed.ok) return { error: rateParsed.error };
+  const rateValue =
+    rateParsed.value == null || rateParsed.value === 0
+      ? verticalDefaults.rate ?? rateParsed.value
+      : rateParsed.value;
   const amount = parseMoney(formField(formData, "revenue"), "Amount", false);
   if (!amount.ok) return { error: amount.error };
   const netDays = parseInteger(formField(formData, "paymentTermsDays"), "NET days", 0, 365, true);
@@ -244,14 +280,14 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
     WHERE id = ${buyer.id} AND "tenantId" = ${ctx.tenantId}
   `;
 
-  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), RateType.CPL);
+  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), verticalDefaults.rateType);
   const revenueFromForm = amount.value;
-  const computedRevenue = lineTotal(rateType, leadCount.value, rate.value, revenueFromForm).toNumber();
+  const computedRevenue = lineTotal(rateType, leadCount.value, rateValue, revenueFromForm).toNumber();
   const revenue = revenueFromForm && revenueFromForm > 0 ? revenueFromForm : computedRevenue;
   if (!revenue || revenue <= 0) return { error: "Enter lead count and rate, or set the amount." };
   const receivable = revenue;
-  const paymentTermsDays = netDays.value;
-  const terms = formatNetTerms(paymentTermsDays);
+  const paymentTermsDays = netDays.value ?? verticalDefaults.paymentTermsDays;
+  const terms = str(formData, "terms") ?? verticalDefaults.terms ?? formatNetTerms(paymentTermsDays);
   const invoiceDate = invoiceDateResult.value;
   const periodStart = periodStartResult.value ?? invoiceDate;
   const periodEnd = periodEndResult.value ?? invoiceDate;
@@ -264,14 +300,15 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
     data: {
       tenantId: ctx.tenantId,
       buyerId,
-      verticalId: str(formData, "verticalId"),
+      verticalId,
       periodLabel: str(formData, "periodLabel"),
       periodStart,
       periodEnd,
+      invoiceDate,
       dueDate: due,
       leadCount: leadCount.value,
       rateType,
-      rate: rate.value,
+      rate: rateValue,
       revenue,
       invoiceNumber,
       terms,
@@ -296,7 +333,7 @@ export async function markBuyerInvoiceSent(formData: FormData) {
   if (invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   await prisma.buyerInvoice.updateMany({
     where: { id, tenantId: ctx.tenantId },
-    data: { invoiceStatus: InvoiceStatus.SENT },
+      data: { invoiceStatus: InvoiceStatus.SENT, isDraft: false },
   });
   revalidateLedgers();
 }
@@ -330,32 +367,53 @@ export async function upsertPublisherInvoice(
     return { error: "You can only edit your own invoices." };
   }
 
-  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), RateType.CPL);
+  const verticalId = str(formData, "verticalId");
+  const verticalDefaults = await applyPublisherVerticalDefaults({
+    tenantId: ctx.tenantId,
+    publisherId,
+    verticalId,
+    fallbackTermsDays: publisher.defaultPaymentTermsDays ?? 7,
+    fallbackTerms: publisher.defaultTerms,
+  });
+
+  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), verticalDefaults.rateType);
   const leadCount = dec(formData, "leadCount");
-  const rate = dec(formData, "rate");
+  let rate = dec(formData, "rate");
+  if ((rate == null || Number.isNaN(rate)) && verticalDefaults.rate != null) {
+    rate = verticalDefaults.rate;
+  }
   const amountInput = dec(formData, "amount");
   const payableInput = dec(formData, "payable");
   const paidInput = ctx.tenantRole === "PUBLISHER" ? null : dec(formData, "paid");
+  const transactionAmount = ctx.tenantRole === "PUBLISHER" ? null : dec(formData, "transactionAmount");
   const paymentTermsDaysInput = dec(formData, "paymentTermsDays");
-  if (hasInvalidNumber(leadCount, rate, amountInput, payableInput, paidInput, paymentTermsDaysInput)) {
+  if (
+    hasInvalidNumber(leadCount, rate, amountInput, payableInput, paidInput, transactionAmount, paymentTermsDaysInput)
+  ) {
     return { error: "Check the amounts and try again." };
   }
   const computed = lineTotal(rateType, leadCount, rate, amountInput);
-  // Prefer computed when amount matches count×rate path and amount was posted from locked calc.
   const amount = amountInput != null && !Number.isNaN(amountInput) ? amountInput : computed.toNumber();
   const payable = payableInput != null && !Number.isNaN(payableInput) ? payableInput : amount;
-  const terms = str(formData, "terms");
+  const termsInput = str(formData, "terms");
   const paymentTermsDays =
-    paymentTermsDaysInput ?? parsePaymentTermsDays(terms, publisher.defaultPaymentTermsDays);
+    paymentTermsDaysInput ??
+    parsePaymentTermsDays(termsInput, verticalDefaults.paymentTermsDays ?? publisher.defaultPaymentTermsDays);
+  const terms = termsInput ?? verticalDefaults.terms ?? formatNetTerms(paymentTermsDays);
   const periodEnd = date(formData, "periodEnd");
   const periodStart = date(formData, "periodStart");
+  const invoiceDate = date(formData, "invoiceDate") ?? periodStart ?? periodEnd ?? previous?.invoiceDate ?? null;
   const due =
     date(formData, "dueDate") ??
-    (periodEnd || periodStart ? dueDate(periodEnd ?? periodStart ?? new Date(), paymentTermsDays) : null);
+    (invoiceDate || periodEnd || periodStart
+      ? dueDate(invoiceDate ?? periodEnd ?? periodStart ?? new Date(), paymentTermsDays)
+      : null);
   const closed = invoiceLockError(
+    invoiceDate,
     periodStart,
     periodEnd,
     due,
+    previous?.invoiceDate,
     previous?.periodStart,
     previous?.periodEnd,
     previous?.dueDate,
@@ -373,12 +431,13 @@ export async function upsertPublisherInvoice(
   const data = {
     tenantId: ctx.tenantId,
     publisherId,
-    verticalId: str(formData, "verticalId"),
+    verticalId,
     monthLabel: str(formData, "monthLabel"),
     weekLabel: str(formData, "weekLabel"),
     periodLabel: str(formData, "periodLabel"),
     periodStart,
     periodEnd,
+    invoiceDate,
     dueDate: due,
     leadCount,
     countLabel: str(formData, "countLabel"),
@@ -391,6 +450,7 @@ export async function upsertPublisherInvoice(
     paymentTermsDays,
     payable,
     paid: paidInput ?? (markedPaid ? payable : previous?.paid ? Number(previous.paid) : null),
+    transactionAmount,
     paidAt: date(formData, "paidAt") ?? (markedPaid ? new Date() : previous?.paidAt ?? null),
     paymentMethod: str(formData, "paymentMethod"),
     paymentStatus,

@@ -133,13 +133,14 @@ export default async function BuyersPage({
       varianceFlagged: Boolean(row.received != null && variance.flagged),
       paymentStatus: row.paymentStatus,
       overdue: isOverdue(row.dueDate, OPEN_BUYER_STATUSES.includes(row.paymentStatus)),
+      isDraft: row.isDraft,
     };
   });
 
   return (
     <Box>
       <PageHeader
-        title={portal ? "Invoices to pay" : "Buyer invoices"}
+        title={portal ? "Invoices to pay" : "Invoices"}
         description={
           portal
             ? `${total} invoice${total === 1 ? "" : "s"} for your account · ${formatMoney(num(totals._sum.receivable))} due`

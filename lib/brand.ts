@@ -5,7 +5,7 @@ export const APP_PURPOSE =
 export const POWERED_BY = "Devdabs";
 export const POWERED_BY_URL = process.env.POWERED_BY_URL?.replace(/\/$/, "") || "https://devdabs.com";
 export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL?.trim() || "admin@fundlookup.co";
-export const LEGAL_EFFECTIVE_DATE = "August 14, 2026";
+export const LEGAL_EFFECTIVE_DATE = "August 17, 2026";
 
 /** Public marketing site (lander, privacy, terms). */
 export const MARKETING_HOST = "fundlookup.co";

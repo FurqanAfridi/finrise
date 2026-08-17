@@ -20,8 +20,8 @@ export function DirectoryAddForm() {
       <Box sx={{ gridColumn: "1 / -1" }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.55 }}>
           {kind === "vertical"
-            ? "Verticals group invoices for reporting."
-            : "Enter full contact details. After saving, invite them so they only see their own invoices."}
+            ? "Add a custom vertical if it is not in the PPC catalog. Standard offers are seeded automatically."
+            : "Enter full contact details. After saving, add verticals below with their own NET terms."}
         </Typography>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
           {([
@@ -122,7 +122,7 @@ export function ContactInviteButton({
         hideLabel
         maxLength={254}
       />
-      <Button type="submit" size="small" variant="outlined" color="secondary">
+      <Button type="submit" size="small" variant="outlined" color="secondary" sx={{ minHeight: 44 }}>
         {resend ? "Resend invite" : "Send invite"}
       </Button>
       {state.ok && state.emailed ? (
@@ -161,7 +161,7 @@ export function ContactLifecycleActions({
         <input type="hidden" name="kind" value={kind} />
         <input type="hidden" name="contactId" value={contactId} />
         <input type="hidden" name="isActive" value={isActive ? "false" : "true"} />
-        <Button type="submit" size="small" variant="outlined">
+        <Button type="submit" size="small" variant="outlined" sx={{ minHeight: 44 }}>
           {isActive ? "Deactivate" : "Reactivate"}
         </Button>
       </Box>
@@ -169,7 +169,7 @@ export function ContactLifecycleActions({
         <Box component="form" action={removeContact}>
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="contactId" value={contactId} />
-          <Button type="submit" size="small" color="error" variant="text">
+          <Button type="submit" size="small" color="error" variant="text" sx={{ minHeight: 44 }}>
             Remove
           </Button>
         </Box>

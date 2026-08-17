@@ -18,10 +18,11 @@ export const PUBLIC_PREFIXES = [
   "/api/auth",
   "/privacy",
   "/terms",
+  "/data-deletion",
   "/welcome",
 ];
 
-const MARKETING_PATHS = new Set(["/", "/privacy", "/terms", "/welcome", "/robots.txt", "/sitemap.xml"]);
+const MARKETING_PATHS = new Set(["/", "/privacy", "/terms", "/data-deletion", "/welcome", "/robots.txt", "/sitemap.xml"]);
 
 function hasSession(request: NextRequest) {
   return Boolean(
@@ -44,7 +45,14 @@ function isGoogleSiteVerifyPath(pathname: string) {
 function isMarketingPublicPath(pathname: string) {
   if (MARKETING_PATHS.has(pathname)) return true;
   if (isGoogleSiteVerifyPath(pathname)) return true;
-  return pathname === "/privacy" || pathname.startsWith("/privacy/") || pathname === "/terms" || pathname.startsWith("/terms/");
+  return (
+    pathname === "/privacy" ||
+    pathname.startsWith("/privacy/") ||
+    pathname === "/terms" ||
+    pathname.startsWith("/terms/") ||
+    pathname === "/data-deletion" ||
+    pathname.startsWith("/data-deletion/")
+  );
 }
 
 export function proxy(request: NextRequest) {

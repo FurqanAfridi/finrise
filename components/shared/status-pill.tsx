@@ -56,6 +56,19 @@ const SPECIAL: Record<string, PillSpec> = {
   active: { label: "Active", tone: "success", icon: IconCircleCheck },
   inactive: { label: "Inactive", tone: "neutral", icon: IconBan },
   closed: { label: "Closed", tone: "neutral", icon: IconBan },
+  draft: { label: "Draft", tone: "info", icon: IconInfoCircle },
+  invoiced: { label: "On invoice", tone: "success", icon: IconCircleCheck },
+  on_draft: { label: "On draft", tone: "info", icon: IconInfoCircle },
+  unbilled: { label: "Not invoiced", tone: "warning", icon: IconClock },
+  variance: { label: "Variance", tone: "warning", icon: IconAlertTriangle },
+  missing: { label: "Missed day", tone: "warning", icon: IconClock },
+  due_soon: { label: "Due soon", tone: "info", icon: IconClock },
+  paid: { label: "Paid", tone: "success", icon: IconCircleCheck },
+  compatible: { label: "Compatible", tone: "success", icon: IconCircleCheck },
+  needs_mapping: { label: "Needs mapping", tone: "warning", icon: IconClock },
+  matched: { label: "Matched", tone: "success", icon: IconCircleCheck },
+  not_in_sheet: { label: "Not in sheet", tone: "warning", icon: IconAlertTriangle },
+  unused: { label: "Not used", tone: "neutral", icon: IconBan },
 };
 
 export function StatusPill({
@@ -66,7 +79,25 @@ export function StatusPill({
 }: {
   paymentStatus?: PaymentStatus;
   invoiceStatus?: InvoiceStatus;
-  kind?: "overdue" | "pending_approval" | "active" | "inactive" | "closed";
+  kind?:
+    | "overdue"
+    | "pending_approval"
+    | "active"
+    | "inactive"
+    | "closed"
+    | "draft"
+    | "invoiced"
+    | "on_draft"
+    | "unbilled"
+    | "variance"
+    | "missing"
+    | "due_soon"
+    | "paid"
+    | "compatible"
+    | "needs_mapping"
+    | "matched"
+    | "not_in_sheet"
+    | "unused";
   label?: string;
 }) {
   const spec =
@@ -95,6 +126,7 @@ export function StatusPill({
         lineHeight: 1.2,
         whiteSpace: "nowrap",
         maxWidth: "100%",
+        flexShrink: 0,
       }}
     >
       <Icon size={14} stroke={2} aria-hidden />

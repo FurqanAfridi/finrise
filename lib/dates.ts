@@ -16,3 +16,16 @@ export function displayDate(value?: Date | string | null) {
     timeZone: "UTC",
   });
 }
+
+export function displayDateWeekday(value?: Date | string | null) {
+  if (!value) return "None";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "None";
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}

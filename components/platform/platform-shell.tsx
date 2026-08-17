@@ -182,12 +182,13 @@ export function PlatformShell({
         <Box
           component="main"
           sx={{
-            px: { xs: 2, md: 3 },
+            px: { xs: 2, md: 3, xl: 4 },
             py: 3,
             pb: { xs: 10, md: 3 },
             maxWidth: contentMaxWidth,
             mx: "auto",
             width: 1,
+            minWidth: 0,
           }}
         >
           {children}

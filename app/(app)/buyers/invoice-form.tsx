@@ -27,7 +27,9 @@ type Invoice = {
   rate?: unknown;
   revenue?: unknown;
   invoiceNumber?: string | null;
+  invoiceDate?: Date | null;
   terms?: string | null;
+  bankCredit?: unknown;
   paymentTermsDays?: number | null;
   paymentStatus?: PaymentStatus;
   invoiceStatus?: InvoiceStatus;
@@ -75,10 +77,11 @@ export function BuyerInvoiceForm({
           ))}
         </NativeSelect>
         <TextInput label="Invoice number" name="invoiceNumber" defaultValue={invoice?.invoiceNumber ?? ""} />
-        <TextInput label="Period label" name="periodLabel" defaultValue={invoice?.periodLabel ?? ""} />
+        <TextInput label="Date range" name="periodLabel" defaultValue={invoice?.periodLabel ?? ""} helperText="Matches your sheet date range column" />
+        <TextInput label="Date" name="invoiceDate" type="date" defaultValue={isoDate(invoice?.invoiceDate ?? invoice?.periodStart)} />
+        <TextInput label="Due date" name="dueDate" type="date" defaultValue={isoDate(invoice?.dueDate)} />
         <TextInput label="Period start" name="periodStart" type="date" defaultValue={isoDate(invoice?.periodStart)} />
         <TextInput label="Period end" name="periodEnd" type="date" defaultValue={isoDate(invoice?.periodEnd)} />
-        <TextInput label="Due date" name="dueDate" type="date" defaultValue={isoDate(invoice?.dueDate)} />
 
         <InvoiceLineFields
           totalName="revenue"
@@ -92,21 +95,30 @@ export function BuyerInvoiceForm({
           defaultMirror={invoice?.receivable == null ? "" : String(num(invoice.receivable))}
         />
 
+        <NetDaysSelect
+          name="paymentTermsDays"
+          defaultValue={invoice?.paymentTermsDays ?? 7}
+          required
+        />
+        <TextInput label="Payment terms" name="terms" defaultValue={invoice?.terms ?? ""} maxLength={80} />
+        <PaymentStatusSelect name="paymentStatus" defaultValue={invoice?.paymentStatus} />
+        <InvoiceStatusSelect name="invoiceStatus" defaultValue={invoice?.invoiceStatus} />
         <TextInput
-          label="Received"
+          label="Payment received"
           name="received"
           defaultValue={invoice?.received == null ? "" : String(num(invoice.received))}
           kind="decimal"
           maxDecimals={2}
           min={0}
         />
-        <NetDaysSelect
-          name="paymentTermsDays"
-          defaultValue={invoice?.paymentTermsDays ?? 7}
-          required
+        <TextInput
+          label="Bank credit"
+          name="bankCredit"
+          defaultValue={invoice?.bankCredit == null ? "" : String(num(invoice.bankCredit))}
+          kind="decimal"
+          maxDecimals={2}
+          min={0}
         />
-        <PaymentStatusSelect name="paymentStatus" defaultValue={invoice?.paymentStatus} />
-        <InvoiceStatusSelect name="invoiceStatus" defaultValue={invoice?.invoiceStatus} />
         <TextInput label="Paid at" name="paidAt" type="date" defaultValue={isoDate(invoice?.paidAt)} />
         <TextInput label="Payment method" name="paymentMethod" defaultValue={invoice?.paymentMethod ?? ""} maxLength={80} />
         <TextInput label="Comments" name="comments" defaultValue={invoice?.comments ?? ""} maxLength={500} />

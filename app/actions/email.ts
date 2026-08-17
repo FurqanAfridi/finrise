@@ -256,7 +256,7 @@ export async function sendInvoiceEmailAction(
     });
     await prisma.buyerInvoice.updateMany({
       where: { id: invoice.id, tenantId: ctx.tenantId },
-      data: { invoiceStatus: InvoiceStatus.SENT },
+      data: { invoiceStatus: InvoiceStatus.SENT, isDraft: false },
     });
     await notifyReviewers({
       tenantId: ctx.tenantId,

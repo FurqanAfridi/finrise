@@ -34,7 +34,7 @@ export default async function IntegrationsPage({
     : `Ask whoever hosts ${APP_NAME} to set the Google client ID and secret.`;
 
   return (
-    <Box sx={{ maxWidth: 920 }}>
+    <Box sx={{ width: "100%", maxWidth: "100%" }}>
       <PageHeader
         title="Integrations"
         description="Connect Google Sheets or upload a spreadsheet to import historical buyer and publisher data."

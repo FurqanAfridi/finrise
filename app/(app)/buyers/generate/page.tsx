@@ -8,14 +8,18 @@ import { MainCard } from "@/components/berry/main-card";
 import { PageHeader } from "@/components/page-header";
 import { getCompanyBranding, nextBuyerInvoiceNumber } from "@/lib/company-branding";
 import { getDirectoryOptions } from "@/lib/queries";
+import { listBuyerVerticalOffers } from "@/lib/contact-verticals";
 import { requireBrokerOps } from "@/lib/tenant";
 
 export default async function GenerateBuyerInvoicePage() {
   const ctx = await requireBrokerOps();
-  const [{ buyers, verticals }, nextNumber, branding] = await Promise.all([
-    getDirectoryOptions(ctx.tenantId),
+  const { buyers, verticals } = await getDirectoryOptions(ctx.tenantId);
+  const [nextNumber, branding, buyerVerticalOffers] = await Promise.all([
     nextBuyerInvoiceNumber(ctx.tenantId),
     getCompanyBranding(ctx.tenantId, ctx.tenantName),
+    Promise.all(
+      buyers.map(async (buyer) => [buyer.id, await listBuyerVerticalOffers(ctx.tenantId, buyer.id)] as const),
+    ).then((rows) => Object.fromEntries(rows)),
   ]);
 
   return (
@@ -66,6 +70,7 @@ export default async function GenerateBuyerInvoicePage() {
         <GenerateInvoiceForm
           buyers={buyers}
           verticals={verticals}
+          buyerVerticalOffers={buyerVerticalOffers}
           nextNumber={nextNumber}
           defaultNetDays={branding.defaultNetDays}
         />

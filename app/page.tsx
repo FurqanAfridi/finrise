@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = (await headers()).get("host");
   if (isMarketingHost(host)) {
     return {
-      title: APP_NAME,
+      title: `${APP_NAME} · Invoice and profit tracking`,
       applicationName: APP_NAME,
       description: APP_PURPOSE,
     };

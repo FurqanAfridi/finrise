@@ -38,6 +38,7 @@ export type BuyerInvoiceRow = {
   varianceFlagged: boolean;
   paymentStatus: PaymentStatus;
   overdue: boolean;
+  isDraft?: boolean;
 };
 
 function DrawerRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -131,6 +132,7 @@ export function BuyerInvoicesView({
                   <TableCell>
                     <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", gap: 0.5 }}>
                       <StatusPill paymentStatus={row.paymentStatus} />
+                      {row.isDraft ? <StatusPill kind="draft" /> : null}
                       {row.overdue ? <StatusPill kind="overdue" /> : null}
                     </Stack>
                   </TableCell>
@@ -188,6 +190,7 @@ export function BuyerInvoicesView({
               </Typography>
               <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.5 }}>
                 <StatusPill paymentStatus={row.paymentStatus} />
+                {row.isDraft ? <StatusPill kind="draft" /> : null}
                 {row.overdue ? <StatusPill kind="overdue" /> : null}
               </Stack>
             </Box>
@@ -205,6 +208,7 @@ export function BuyerInvoicesView({
           <Stack spacing={2}>
             <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75 }}>
               <StatusPill paymentStatus={selected.paymentStatus} />
+              {selected.isDraft ? <StatusPill kind="draft" /> : null}
               {selected.overdue ? <StatusPill kind="overdue" /> : null}
             </Stack>
             <Box>

@@ -73,7 +73,7 @@ const ALIASES: Record<string, string[]> = {
   count: ["count", "unit_count", "lead_count", "leads", "qty", "quantity"],
   rate_type: ["rate_type", "type"],
   rate: ["rate", "unit_rate", "cpl", "cpa"],
-  total: ["total", "total_revenue", "amount", "revenue"],
+    total: ["total", "total_revenue", "total_amount", "amount", "revenue"],
   invoice_number: ["invoice_number", "invoice", "invoice_no", "inv"],
   payment_terms: ["payment_terms", "terms", "net"],
   due_date: ["due_date", "due"],
@@ -94,8 +94,19 @@ const ALIASES: Record<string, string[]> = {
   notes: ["notes", "note", "comment"],
 };
 
+export function fieldAliases(field: ImportField) {
+  const extra = ALIASES[field.key] ?? [];
+  return [...new Set([field.key, normalizeHeader(field.label), ...extra])];
+}
+
 export function normalizeHeader(value: string) {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, "")
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 export function splitCsvLine(line: string): string[] {
@@ -135,7 +146,7 @@ export function guessColumnMapping(kind: ImportKind, headers: string[]): Record<
   const normalized = headers.map(normalizeHeader);
   const used = new Set<number>();
   for (const field of IMPORT_FIELDS[kind]) {
-    const aliases = ALIASES[field.key] ?? [field.key];
+    const aliases = fieldAliases(field);
     const index = normalized.findIndex((header, i) => !used.has(i) && aliases.includes(header));
     if (index >= 0) {
       mapping[field.key] = index;
@@ -175,4 +186,63 @@ export function mappingIsValid(kind: ImportKind, mapping: Record<string, number>
   return IMPORT_FIELDS[kind]
     .filter((field) => field.required)
     .every((field) => mapping[field.key] != null && mapping[field.key] >= 0);
+}
+
+export type FieldCompatibility = {
+  key: string;
+  label: string;
+  required: boolean;
+  matched: boolean;
+  column: string | null;
+  columnIndex: number | null;
+};
+
+export type SheetCompatibility = {
+  ready: boolean;
+  matchedRequired: number;
+  requiredTotal: number;
+  matchedOptional: number;
+  optionalTotal: number;
+  extraColumns: string[];
+  fields: FieldCompatibility[];
+  summary: "compatible" | "needs_mapping";
+};
+
+export function assessSheetCompatibility(
+  kind: ImportKind,
+  headers: string[],
+  mapping = guessColumnMapping(kind, headers),
+): SheetCompatibility {
+  const fields: FieldCompatibility[] = IMPORT_FIELDS[kind].map((field) => {
+    const index = mapping[field.key];
+    const matched = index != null && index >= 0 && index < headers.length;
+    return {
+      key: field.key,
+      label: field.label,
+      required: Boolean(field.required),
+      matched,
+      column: matched ? headers[index] || `Column ${index + 1}` : null,
+      columnIndex: matched ? index : null,
+    };
+  });
+  const used = new Set(fields.filter((row) => row.columnIndex != null).map((row) => row.columnIndex));
+  const extraColumns = headers
+    .map((header, index) => ({ header: header || `Column ${index + 1}`, index }))
+    .filter((row) => !used.has(row.index))
+    .map((row) => row.header);
+  const required = fields.filter((row) => row.required);
+  const optional = fields.filter((row) => !row.required);
+  const matchedRequired = required.filter((row) => row.matched).length;
+  const matchedOptional = optional.filter((row) => row.matched).length;
+  const ready = matchedRequired === required.length && required.length > 0;
+  return {
+    ready,
+    matchedRequired,
+    requiredTotal: required.length,
+    matchedOptional,
+    optionalTotal: optional.length,
+    extraColumns,
+    fields,
+    summary: ready ? "compatible" : "needs_mapping",
+  };
 }

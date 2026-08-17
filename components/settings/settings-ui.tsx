@@ -78,7 +78,7 @@ export function SettingsSection({
         {title}
       </Typography>
       {description ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 640, lineHeight: 1.6 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: { xs: "100%", md: 720 }, lineHeight: 1.6 }}>
           {description}
         </Typography>
       ) : null}
@@ -89,6 +89,8 @@ export function SettingsSection({
           borderRadius: 2,
           overflow: "hidden",
           bgcolor: "background.paper",
+          width: "100%",
+          minWidth: 0,
         }}
       >
         {children}
@@ -115,7 +117,12 @@ export function SettingsRow({
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: action ? "minmax(200px, 260px) minmax(0, 1fr) auto" : "minmax(200px, 260px) minmax(0, 1fr)" },
+        gridTemplateColumns: {
+          xs: "1fr",
+          md: action
+            ? "minmax(160px, 240px) minmax(0, 1fr) minmax(min-content, max-content)"
+            : "minmax(160px, 240px) minmax(0, 1fr)",
+        },
         gap: { xs: 1.25, md: 3 },
         alignItems: { xs: "stretch", md: align },
         px: { xs: 2, md: 3 },
@@ -141,7 +148,18 @@ export function SettingsRow({
         <span />
       )}
       {action ? (
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: { xs: "flex-start", md: "flex-end" } }}>{action}</Box>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: { xs: "flex-start", md: "flex-end" },
+            flexWrap: "wrap",
+            gap: 1,
+            minWidth: 0,
+          }}
+        >
+          {action}
+        </Box>
       ) : null}
     </Box>
   );

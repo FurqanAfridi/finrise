@@ -133,13 +133,14 @@ export default async function PublishersPage({
       varianceFlagged: Boolean(row.paid != null && variance.flagged),
       paymentStatus: row.paymentStatus,
       paidApprovalStatus: row.paidApprovalStatus as PaidApprovalStatus | null,
+      isDraft: row.isDraft,
     };
   });
 
   return (
     <Box>
       <PageHeader
-        title={portal ? "My invoices" : "Publisher payables"}
+        title={portal ? "My invoices" : "Payables"}
         description={
           portal
             ? `${total} invoice${total === 1 ? "" : "s"} for your account · ${formatMoney(num(totals._sum.payable))} owed`

@@ -20,6 +20,8 @@ function clearHref(basePath: string, query: Record<string, string>, removeKey?: 
     delete next[removeKey];
     if (removeKey === "year") delete next.month;
     if (removeKey === "month") delete next.year;
+    if (removeKey === "from") delete next.to;
+    if (removeKey === "to") delete next.from;
   } else {
     for (const key of Object.keys(next)) delete next[key];
   }

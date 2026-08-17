@@ -51,7 +51,7 @@ export default async function SettingsPage({
     `;
     const user = userRows[0];
     return (
-      <Box sx={{ maxWidth: 920 }}>
+      <Box sx={{ width: "100%", maxWidth: "100%" }}>
         <SettingsHashRedirect />
         <PageHeader title="Profile" description="Your name and avatar across Fundlookup." />
         <SettingsTabs active={tab} tabs={visibleTabs} />
@@ -75,7 +75,7 @@ export default async function SettingsPage({
     });
 
     return (
-      <Box sx={{ maxWidth: 920 }}>
+      <Box sx={{ width: "100%", maxWidth: "100%" }}>
         <SettingsHashRedirect />
         <PageHeader
           title="Companies"
@@ -104,7 +104,7 @@ export default async function SettingsPage({
   ]);
 
   return (
-    <Box sx={{ maxWidth: 920 }}>
+    <Box sx={{ width: "100%", maxWidth: "100%" }}>
       <SettingsHashRedirect />
       <PageHeader
         title={branding.legalName}

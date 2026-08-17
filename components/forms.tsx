@@ -234,6 +234,7 @@ export function NetDaysSelect({
   required,
   hideLabel,
   errorMessage,
+  helperText,
 }: {
   name?: string;
   label?: string;
@@ -243,6 +244,7 @@ export function NetDaysSelect({
   required?: boolean;
   hideLabel?: boolean;
   errorMessage?: string;
+  helperText?: string;
 }) {
   const parsed = Number(value ?? defaultValue);
   const selected = Number.isFinite(parsed) ? String(parsed) : "7";
@@ -256,6 +258,7 @@ export function NetDaysSelect({
       required={required}
       hideLabel={hideLabel}
       errorMessage={errorMessage}
+      helperText={helperText}
       {...(value !== undefined
         ? { value: selected, onChange }
         : { defaultValue: selected })}
@@ -291,6 +294,7 @@ export function TextInput({
   placeholder,
   startAdornment,
   sanitize,
+  onValueChange,
 }: {
   label: string;
   name: string;
@@ -315,6 +319,7 @@ export function TextInput({
   placeholder?: string;
   startAdornment?: React.ReactNode;
   sanitize?: (value: string) => string;
+  onValueChange?: (value: string) => void;
 }) {
   const resolvedKind: TextInputKind =
     kind ?? (numeric === "int" ? "int" : numeric === "decimal" ? "decimal" : "text");
@@ -363,6 +368,7 @@ export function TextInput({
       next = next.slice(0, defaultMaxLength);
     }
     setValue(next);
+    onValueChange?.(next);
   }
 
   return (

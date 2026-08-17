@@ -13,6 +13,14 @@ import { money } from "@/lib/finance/decimal";
 import { lockedFinanceError, lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { createCompanyForUser } from "@/lib/company";
+import {
+  addBuyerVerticalOffer,
+  addPublisherVerticalOffer,
+  parseVerticalOfferFields,
+  parseVerticalOfferRowsFromForm,
+  removeBuyerVerticalOffer,
+  removePublisherVerticalOffer,
+} from "@/lib/contact-verticals";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { inviteEmailContent } from "@/lib/invite-email";
 import { INVITE_FROM_EMAIL, platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
@@ -23,6 +31,7 @@ import {
   parseCompanyName,
   parseCurrency,
   parseEmail,
+  parseFormDate,
   parseHexColor,
   parseInteger,
   parseMoney,
@@ -243,6 +252,7 @@ export async function setContactActive(formData: FormData) {
   revalidatePath("/directory");
   revalidatePath("/buyers");
   revalidatePath("/publishers");
+  revalidatePath(kind === "publisher" ? `/directory/publishers/${contactId}` : `/directory/buyers/${contactId}`);
 }
 
 export async function removeContact(formData: FormData) {
@@ -250,6 +260,7 @@ export async function removeContact(formData: FormData) {
   const kind = str(formData, "kind");
   const contactId = str(formData, "contactId");
   if (!kind || !contactId) return;
+  let deleted = false;
 
   if (kind === "buyer") {
     const invoices = await prisma.buyerInvoice.count({ where: { buyerId: contactId, tenantId: ctx.tenantId } });
@@ -261,6 +272,7 @@ export async function removeContact(formData: FormData) {
     } else {
       await prisma.invite.deleteMany({ where: { buyerId: contactId, tenantId: ctx.tenantId, usedAt: null } });
       await prisma.buyer.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } });
+      deleted = true;
     }
   } else if (kind === "publisher") {
     const invoices = await prisma.publisherInvoice.count({
@@ -276,11 +288,15 @@ export async function removeContact(formData: FormData) {
         where: { publisherId: contactId, tenantId: ctx.tenantId, usedAt: null },
       });
       await prisma.publisher.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } });
+      deleted = true;
     }
   }
   revalidatePath("/directory");
   revalidatePath("/buyers");
   revalidatePath("/publishers");
+  if (deleted) {
+    redirect(kind === "publisher" ? "/directory?tab=publishers" : "/directory?tab=buyers");
+  }
 }
 
 export async function upsertPartner(formData: FormData) {
@@ -403,6 +419,7 @@ export async function upsertDirectory(
 ): Promise<FormActionState> {
   const ctx = await requireBrokerOps();
   const kind = str(formData, "kind");
+  const existingId = str(formData, "id");
   const name = parseCompanyName(formField(formData, "name"));
   if (!kind) return invalid("kind", "Choose a contact type.");
   if (!name.ok) return invalid("name", name.error);
@@ -420,22 +437,61 @@ export async function upsertDirectory(
     }
     const defaultMethod = str(formData, "defaultMethod");
     const defaultTerms = str(formData, "defaultTerms");
+    const contractStart = parseFormDate(formField(formData, "contractStartDate"), "Contract start date", !existingId);
+    if (!contractStart.ok) return invalid("contractStartDate", contractStart.error);
+    const offers = existingId ? { ok: true as const, value: [] } : parseVerticalOfferRowsFromForm(formData);
+    if (!offers.ok) return { error: offers.error };
     const dup = await prisma.buyer.findFirst({
-      where: { tenantId: ctx.tenantId, name: name.value },
+      where: {
+        tenantId: ctx.tenantId,
+        name: name.value,
+        ...(existingId ? { id: { not: existingId } } : {}),
+      },
       select: { id: true },
     });
     if (dup) return invalid("name", "A buyer with that name already exists in this company.");
-    const id = `c${randomBytes(12).toString("hex")}`;
-    await prisma.$executeRaw`
-      INSERT INTO "Buyer" (
-        id, "tenantId", name, email, address, "contactName",
-        "defaultTerms", "defaultMethod", "defaultPaymentTermsDays"
-      )
-      VALUES (
-        ${id}, ${ctx.tenantId}, ${name.value}, ${email.value}, ${address}, ${contactName.value},
-        ${defaultTerms}, ${defaultMethod}, ${termsDays.value}
-      )
-    `;
+
+    let buyerId = existingId;
+    if (existingId) {
+      const existing = await prisma.buyer.findFirst({ where: { id: existingId, tenantId: ctx.tenantId } });
+      if (!existing) return { error: "Buyer not found." };
+      await prisma.buyer.update({
+        where: { id: existingId },
+        data: {
+          name: name.value,
+          email: email.value,
+          address,
+          contactName: contactName.value,
+          defaultTerms,
+          defaultMethod,
+          defaultPaymentTermsDays: termsDays.value,
+          contractStartDate: contractStart.value,
+        },
+      });
+    } else {
+      buyerId = `c${randomBytes(12).toString("hex")}`;
+      await prisma.buyer.create({
+        data: {
+          id: buyerId,
+          tenantId: ctx.tenantId,
+          name: name.value,
+          email: email.value,
+          address,
+          contactName: contactName.value,
+          defaultTerms,
+          defaultMethod,
+          defaultPaymentTermsDays: termsDays.value,
+          contractStartDate: contractStart.value,
+        },
+      });
+      for (const offer of offers.value) {
+        await addBuyerVerticalOffer({ tenantId: ctx.tenantId, buyerId, ...offer });
+      }
+    }
+
+    revalidatePath("/directory");
+    revalidatePath("/buyers");
+    redirect(`/directory/buyers/${buyerId}`);
   }
 
   if (kind === "publisher") {
@@ -451,37 +507,168 @@ export async function upsertDirectory(
     }
     const isInternal = str(formData, "isInternal") === "true";
     const defaultTerms = str(formData, "defaultTerms");
+    const contractStart = parseFormDate(formField(formData, "contractStartDate"), "Contract start date", !existingId);
+    if (!contractStart.ok) return invalid("contractStartDate", contractStart.error);
+    const offers = existingId ? { ok: true as const, value: [] } : parseVerticalOfferRowsFromForm(formData);
+    if (!offers.ok) return { error: offers.error };
     const dup = await prisma.publisher.findFirst({
-      where: { tenantId: ctx.tenantId, name: name.value },
+      where: {
+        tenantId: ctx.tenantId,
+        name: name.value,
+        ...(existingId ? { id: { not: existingId } } : {}),
+      },
       select: { id: true },
     });
     if (dup) return invalid("name", "A publisher with that name already exists in this company.");
-    const id = `c${randomBytes(12).toString("hex")}`;
-    // Raw insert: stale Next Prisma clients may not know Publisher.email/contactName/address yet.
-    await prisma.$executeRaw`
-      INSERT INTO "Publisher" (
-        id, "tenantId", name, email, address, "contactName",
-        "defaultTerms", "defaultPaymentTermsDays", "isInternal"
-      )
-      VALUES (
-        ${id}, ${ctx.tenantId}, ${name.value}, ${email.value}, ${address}, ${contactName.value},
-        ${defaultTerms}, ${termsDays.value}, ${isInternal}
-      )
-    `;
+
+    let publisherId = existingId;
+    if (existingId) {
+      const existing = await prisma.publisher.findFirst({ where: { id: existingId, tenantId: ctx.tenantId } });
+      if (!existing) return { error: "Publisher not found." };
+      await prisma.publisher.update({
+        where: { id: existingId },
+        data: {
+          name: name.value,
+          email: email.value,
+          address,
+          contactName: contactName.value,
+          defaultTerms,
+          defaultPaymentTermsDays: termsDays.value,
+          isInternal,
+          contractStartDate: contractStart.value,
+        },
+      });
+    } else {
+      publisherId = `c${randomBytes(12).toString("hex")}`;
+      await prisma.publisher.create({
+        data: {
+          id: publisherId,
+          tenantId: ctx.tenantId,
+          name: name.value,
+          email: email.value,
+          address,
+          contactName: contactName.value,
+          defaultTerms,
+          defaultPaymentTermsDays: termsDays.value,
+          isInternal,
+          contractStartDate: contractStart.value,
+        },
+      });
+      for (const offer of offers.value) {
+        await addPublisherVerticalOffer({ tenantId: ctx.tenantId, publisherId, ...offer });
+      }
+    }
+
+    revalidatePath("/directory");
+    revalidatePath("/publishers");
+    redirect(`/directory/publishers/${publisherId}`);
   }
 
   if (kind === "vertical") {
     try {
-      await prisma.vertical.create({ data: { tenantId: ctx.tenantId, name: name.value } });
+      await prisma.vertical.create({ data: { tenantId: ctx.tenantId, name: name.value, isSystem: false } });
     } catch {
       return invalid("name", "A vertical with that name already exists.");
     }
+    revalidatePath("/directory");
+    return { ok: true };
   }
 
+  return { error: "Choose a contact type." };
+}
+
+export async function addBuyerVerticalAction(
+  _prev: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const ctx = await requireBrokerOps();
+  const buyerId = str(formData, "buyerId");
+  const verticalId = str(formData, "verticalId");
+  if (!buyerId || !verticalId) return { error: "Choose a buyer and vertical." };
+  const buyer = await prisma.buyer.findFirst({ where: { id: buyerId, tenantId: ctx.tenantId } });
+  if (!buyer) return { error: "Buyer not found." };
+  const vertical = await prisma.vertical.findFirst({ where: { id: verticalId, tenantId: ctx.tenantId } });
+  if (!vertical) return { error: "Vertical not found." };
+  const existing = await prisma.buyerVertical.findFirst({ where: { buyerId, verticalId } });
+  if (existing) return { error: `${buyer.name} already has ${vertical.name}. Edit the existing row or pick another vertical.` };
+  const parsed = parseVerticalOfferFields(formData);
+  if (!parsed.ok) return { error: parsed.error };
+  try {
+    await addBuyerVerticalOffer({
+      tenantId: ctx.tenantId,
+      buyerId,
+      verticalId,
+      ...parsed.value,
+    });
+  } catch {
+    return { error: "Could not save this vertical for the buyer." };
+  }
   revalidatePath("/directory");
   revalidatePath("/buyers");
-  revalidatePath("/publishers");
+  revalidatePath(`/directory/buyers/${buyerId}`);
   return { ok: true };
+}
+
+export async function addPublisherVerticalAction(
+  _prev: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const ctx = await requireBrokerOps();
+  const publisherId = str(formData, "publisherId");
+  const verticalId = str(formData, "verticalId");
+  if (!publisherId || !verticalId) return { error: "Choose a publisher and vertical." };
+  const publisher = await prisma.publisher.findFirst({ where: { id: publisherId, tenantId: ctx.tenantId } });
+  if (!publisher) return { error: "Publisher not found." };
+  const vertical = await prisma.vertical.findFirst({ where: { id: verticalId, tenantId: ctx.tenantId } });
+  if (!vertical) return { error: "Vertical not found." };
+  const existing = await prisma.publisherVertical.findFirst({ where: { publisherId, verticalId } });
+  if (existing) {
+    return { error: `${publisher.name} already has ${vertical.name}. Edit the existing row or pick another vertical.` };
+  }
+  const parsed = parseVerticalOfferFields(formData);
+  if (!parsed.ok) return { error: parsed.error };
+  try {
+    await addPublisherVerticalOffer({
+      tenantId: ctx.tenantId,
+      publisherId,
+      verticalId,
+      ...parsed.value,
+    });
+  } catch {
+    return { error: "Could not save this vertical for the publisher." };
+  }
+  revalidatePath("/directory");
+  revalidatePath("/publishers");
+  revalidatePath(`/directory/publishers/${publisherId}`);
+  return { ok: true };
+}
+
+export async function removeBuyerVerticalAction(formData: FormData) {
+  const ctx = await requireBrokerOps();
+  const offerId = str(formData, "offerId");
+  if (!offerId) return;
+  const offer = await prisma.buyerVertical.findFirst({
+    where: { id: offerId, tenantId: ctx.tenantId },
+    select: { buyerId: true },
+  });
+  await removeBuyerVerticalOffer(ctx.tenantId, offerId);
+  revalidatePath("/directory");
+  revalidatePath("/buyers");
+  if (offer) revalidatePath(`/directory/buyers/${offer.buyerId}`);
+}
+
+export async function removePublisherVerticalAction(formData: FormData) {
+  const ctx = await requireBrokerOps();
+  const offerId = str(formData, "offerId");
+  if (!offerId) return;
+  const offer = await prisma.publisherVertical.findFirst({
+    where: { id: offerId, tenantId: ctx.tenantId },
+    select: { publisherId: true },
+  });
+  await removePublisherVerticalOffer(ctx.tenantId, offerId);
+  revalidatePath("/directory");
+  revalidatePath("/publishers");
+  if (offer) revalidatePath(`/directory/publishers/${offer.publisherId}`);
 }
 
 async function sendInviteEmail(input: {

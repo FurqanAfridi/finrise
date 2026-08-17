@@ -19,7 +19,10 @@ export function PageHeader({
   children?: React.ReactNode;
 }) {
   return (
-    <Stack direction="row" sx={{ alignItems: "flex-end", justifyContent: "space-between", mb: 3, gap: 2 }}>
+    <Stack
+      direction="row"
+      sx={{ alignItems: "flex-end", justifyContent: "space-between", mb: 3, gap: 2, flexWrap: "wrap" }}
+    >
       <div>
         <Typography variant="h2">{title}</Typography>
         {description ? (
@@ -28,7 +31,7 @@ export function PageHeader({
           </Typography>
         ) : null}
       </div>
-      <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+      <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
         {children}
         {actionHref && actionLabel ? (
           <Link href={actionHref}>

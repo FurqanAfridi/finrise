@@ -56,7 +56,12 @@ export default function TermsPage() {
           <Link href="/privacy" style={{ color: "var(--fr-primary)", fontWeight: 600 }}>
             privacy policy
           </Link>
-          . Google’s own terms also apply to your Google account. You can disconnect at any time in Integrations.
+          . Google’s own terms also apply to your Google account. You can disconnect at any time in Integrations, and
+          you can request deletion as described on{" "}
+          <Link href="/data-deletion" style={{ color: "var(--fr-primary)", fontWeight: 600 }}>
+            How to delete your data
+          </Link>
+          .
         </p>
 
         <h2 style={legalH2}>Availability</h2>

@@ -50,6 +50,11 @@ enum InvoiceStatus {
   NO_BILLABLES
 }
 
+enum InvoiceOrigin {
+  MANUAL
+  DAILY_CYCLE
+}
+
 enum PartnerTier {
   TOP_LINE
   EQUITY
@@ -86,8 +91,12 @@ model Tenant {
   buyers               Buyer[]
   publishers           Publisher[]
   verticals            Vertical[]
+  buyerVerticals       BuyerVertical[]
+  publisherVerticals   PublisherVertical[]
   buyerInvoices        BuyerInvoice[]
   publisherInvoices    PublisherInvoice[]
+  buyerDailyFigures    BuyerDailyFigure[]
+  publisherDailyFigures PublisherDailyFigure[]
   expenses             Expense[]
   expenseCategories    ExpenseCategory[]
   recurringExpenses    RecurringExpense[]
@@ -187,8 +196,11 @@ model Buyer {
   defaultTerms            String?
   defaultMethod           String?
   defaultPaymentTermsDays Int                 @default(7)
+  contractStartDate       DateTime?           @db.Date
   isActive                Boolean             @default(true)
   invoices                BuyerInvoice[]
+  verticalOffers          BuyerVertical[]
+  dailyFigures            BuyerDailyFigure[]
   memberships             TenantMembership[]
   invites                 Invite[]
 
@@ -206,9 +218,12 @@ model Publisher {
   contactName             String?
   defaultTerms            String?
   defaultPaymentTermsDays Int                 @default(7)
+  contractStartDate       DateTime?           @db.Date
   isInternal              Boolean             @default(false)
   isActive                Boolean             @default(true)
   invoices                PublisherInvoice[]
+  verticalOffers          PublisherVertical[]
+  dailyFigures            PublisherDailyFigure[]
   memberships             TenantMembership[]
   invites                 Invite[]
 
@@ -217,15 +232,109 @@ model Publisher {
 }
 
 model Vertical {
-  id                String             @id @default(cuid())
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantId          String
-  name              String
-  buyerInvoices     BuyerInvoice[]
-  publisherInvoices PublisherInvoice[]
+  id                 String              @id @default(cuid())
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId           String
+  name               String
+  isSystem           Boolean             @default(false)
+  buyerInvoices      BuyerInvoice[]
+  publisherInvoices  PublisherInvoice[]
+  buyerOffers        BuyerVertical[]
+  publisherOffers    PublisherVertical[]
+  buyerDailyFigures  BuyerDailyFigure[]
+  publisherDailyFigures PublisherDailyFigure[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+/** A buyer can buy more than one vertical, each with its own rate and NET terms. */
+model BuyerVertical {
+  id                String   @id @default(cuid())
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId          String
+  buyer             Buyer    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerId           String
+  vertical          Vertical @relation(fields: [verticalId], references: [id], onDelete: Cascade)
+  verticalId        String
+  paymentTermsDays  Int      @default(7)
+  terms             String?
+  rate              Decimal? @db.Decimal(14, 4)
+  rateType          RateType @default(CPL)
+  rateLabel         String?
+
+  @@unique([buyerId, verticalId])
+  @@index([tenantId])
+  @@index([buyerId])
+}
+
+/** A publisher can run more than one vertical, each with its own rate and NET terms. */
+model PublisherVertical {
+  id                String   @id @default(cuid())
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId          String
+  publisher         Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  publisherId       String
+  vertical          Vertical  @relation(fields: [verticalId], references: [id], onDelete: Cascade)
+  verticalId        String
+  paymentTermsDays  Int       @default(7)
+  terms             String?
+  rate              Decimal?  @db.Decimal(14, 4)
+  rateType          RateType  @default(CPL)
+  rateLabel         String?
+
+  @@unique([publisherId, verticalId])
+  @@index([tenantId])
+  @@index([publisherId])
+}
+
+/** One row per contact, vertical, and calendar day. Amount is stored at the rate used that day. */
+model BuyerDailyFigure {
+  id             String        @id @default(cuid())
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId       String
+  buyer          Buyer         @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerId        String
+  vertical       Vertical      @relation(fields: [verticalId], references: [id], onDelete: Cascade)
+  verticalId     String
+  figureDate     DateTime      @db.Date
+  quantity       Decimal       @db.Decimal(14, 2)
+  rate           Decimal?      @db.Decimal(14, 4)
+  rateType       RateType      @default(CPL)
+  amount         Decimal       @db.Decimal(14, 2)
+  notes          String?
+  invoice        BuyerInvoice? @relation(fields: [buyerInvoiceId], references: [id], onDelete: SetNull)
+  buyerInvoiceId String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([buyerId, verticalId, figureDate])
+  @@index([tenantId, figureDate])
+  @@index([buyerId, figureDate])
+}
+
+model PublisherDailyFigure {
+  id                 String            @id @default(cuid())
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId           String
+  publisher          Publisher         @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  publisherId        String
+  vertical           Vertical          @relation(fields: [verticalId], references: [id], onDelete: Cascade)
+  verticalId         String
+  figureDate         DateTime          @db.Date
+  quantity           Decimal           @db.Decimal(14, 2)
+  rate               Decimal?          @db.Decimal(14, 4)
+  rateType           RateType          @default(CPL)
+  amount             Decimal           @db.Decimal(14, 2)
+  notes              String?
+  invoice            PublisherInvoice? @relation(fields: [publisherInvoiceId], references: [id], onDelete: SetNull)
+  publisherInvoiceId String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([publisherId, verticalId, figureDate])
+  @@index([tenantId, figureDate])
+  @@index([publisherId, figureDate])
 }
 
 model BuyerInvoice {
@@ -235,6 +344,7 @@ model BuyerInvoice {
   periodStart      DateTime?
   periodEnd        DateTime?
   periodLabel      String?
+  invoiceDate      DateTime?
   dueDate          DateTime?
   buyer            Buyer         @relation(fields: [buyerId], references: [id])
   buyerId          String
@@ -253,12 +363,17 @@ model BuyerInvoice {
   invoiceStatus    InvoiceStatus @default(NOT_SENT)
   receivable       Decimal       @db.Decimal(14, 2)
   received         Decimal?      @db.Decimal(14, 2)
+  bankCredit       Decimal?      @db.Decimal(14, 2)
   paidAt           DateTime?
   paymentMethod    String?
   comments         String?
+  isDraft          Boolean       @default(false)
+  origin           InvoiceOrigin @default(MANUAL)
+  cycleKey         String?       @unique
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   emailLogs        InvoiceEmailLog[]
+  dailyFigures     BuyerDailyFigure[]
 
   @@index([tenantId])
   @@index([buyerId])
@@ -276,6 +391,7 @@ model PublisherInvoice {
   periodStart        DateTime?
   periodEnd          DateTime?
   periodLabel        String?
+  invoiceDate        DateTime?
   dueDate            DateTime?
   publisher          Publisher           @relation(fields: [publisherId], references: [id])
   publisherId        String
@@ -292,6 +408,7 @@ model PublisherInvoice {
   paymentTermsDays   Int?
   payable            Decimal             @db.Decimal(14, 2)
   paid               Decimal?            @db.Decimal(14, 2)
+  transactionAmount  Decimal?            @db.Decimal(14, 2)
   paidAt             DateTime?
   paymentMethod      String?
   paymentStatus      PaymentStatus       @default(UNPAID)
@@ -299,8 +416,12 @@ model PublisherInvoice {
   paidApprovedAt     DateTime?
   paidApprovedBy     User?               @relation("PaidApprovedBy", fields: [paidApprovedById], references: [id])
   paidApprovedById   String?
+  isDraft            Boolean             @default(false)
+  origin             InvoiceOrigin       @default(MANUAL)
+  cycleKey           String?             @unique
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  dailyFigures       PublisherDailyFigure[]
 
   @@index([tenantId])
   @@index([publisherId])

@@ -19,11 +19,13 @@ import type { ImportRunResult } from "@/lib/import/historical";
 import {
   IMPORT_FIELDS,
   IMPORT_KIND_LABEL,
+  assessSheetCompatibility,
   guessColumnMapping,
   mappingIsValid,
   type ImportKind,
 } from "@/lib/import/table";
 import { WizardSteps } from "@/components/shared/wizard-steps";
+import { StatusPill } from "@/components/shared/status-pill";
 import { SettingsSection } from "@/components/settings/settings-ui";
 import { nativeSelectSlotProps } from "@/components/forms";
 
@@ -58,6 +60,10 @@ export function HistoricalImportWizard({
   const fields = IMPORT_FIELDS[kind];
   const mappingJson = JSON.stringify(mapping);
   const canMap = mappingIsValid(kind, mapping) && headers.length > 0;
+  const compatibility = useMemo(
+    () => (headers.length ? assessSheetCompatibility(kind, headers, mapping) : null),
+    [kind, headers, mapping],
+  );
 
   useEffect(() => {
     if (!googleConnected || source !== "google") return;
@@ -157,172 +163,255 @@ export function HistoricalImportWizard({
   return (
     <SettingsSection
       title="Import historical data"
-      description="Bring in past buyer invoices or publisher payables from Google Sheets, Excel, or CSV. Match each column, run a dry run, then save."
+      description="Bring in past buyer invoices or publisher payables from Google Sheets, Excel, or CSV. Download the sample workbook to see compatible columns, then match each field."
     >
-      <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5 }}>
+      <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 2.5 }, width: "100%", minWidth: 0 }}>
         <WizardSteps steps={STEPS} active={step} />
 
         {step === 0 ? (
-          <Box sx={{ display: "grid", gap: 2, maxWidth: 520 }}>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label="What to import"
-              value={kind}
-              onChange={(event) => setKind(event.target.value as ImportKind)}
-              helperText="Contacts are created automatically from names in the sheet."
-              slotProps={nativeSelectSlotProps}
+          <Box
+            sx={{
+              display: "grid",
+              gap: { xs: 2, md: 3 },
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(280px, 420px) minmax(0, 1fr)" },
+              alignItems: "start",
+            }}
+          >
+            <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label="What to import"
+                value={kind}
+                onChange={(event) => setKind(event.target.value as ImportKind)}
+                helperText="Contacts are created automatically from names in the sheet."
+                slotProps={nativeSelectSlotProps}
+              >
+                <option value="buyers">Buyer invoices (historical)</option>
+                <option value="publishers">Publisher payables (historical)</option>
+                <option value="expenses">Expenses (historical)</option>
+              </TextField>
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label="Source"
+                value={source}
+                onChange={(event) => setSource(event.target.value as "google" | "file")}
+                helperText={
+                  source === "google"
+                    ? googleConnected
+                      ? "Pick a Google spreadsheet you can view."
+                      : "Connect Google Sheets above first."
+                    : "CSV and Excel (.xlsx) use the same column matching."
+                }
+                slotProps={nativeSelectSlotProps}
+              >
+                <option value="google">Google Sheets</option>
+                <option value="file">CSV or Excel file</option>
+              </TextField>
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label="Mode"
+                value={mode}
+                onChange={(event) => setMode(event.target.value)}
+                helperText={
+                  mode === "dry-run"
+                    ? "Checks rows and shows a preview without saving."
+                    : "Writes rows to the ledger. Use only after a clean dry run."
+                }
+                slotProps={nativeSelectSlotProps}
+              >
+                <option value="dry-run">Dry run (check only)</option>
+                <option value="commit">Commit (save)</option>
+              </TextField>
+              <Button
+                component="a"
+                href="/api/integrations/sample-workbook"
+                download="FundLookup-import-sample.xlsx"
+                variant="outlined"
+                color="primary"
+                sx={{ minHeight: 44, alignSelf: "start" }}
+              >
+                Download sample Excel
+              </Button>
+            </Box>
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 2,
+                p: { xs: 2, md: 2.5 },
+                bgcolor: "var(--fr-surface-muted)",
+                minWidth: 0,
+              }}
             >
-              <option value="buyers">Buyer invoices (historical)</option>
-              <option value="publishers">Publisher payables (historical)</option>
-              <option value="expenses">Expenses (historical)</option>
-            </TextField>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label="Source"
-              value={source}
-              onChange={(event) => setSource(event.target.value as "google" | "file")}
-              helperText={
-                source === "google"
-                  ? googleConnected
-                    ? "Pick a Google spreadsheet you can view."
-                    : "Connect Google Sheets above first."
-                  : "CSV and Excel (.xlsx) use the same column matching."
-              }
-              slotProps={nativeSelectSlotProps}
-            >
-              <option value="google">Google Sheets</option>
-              <option value="file">CSV or Excel file</option>
-            </TextField>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label="Mode"
-              value={mode}
-              onChange={(event) => setMode(event.target.value)}
-              helperText={
-                mode === "dry-run"
-                  ? "Checks rows and shows a preview without saving."
-                  : "Writes rows to the ledger. Use only after a clean dry run."
-              }
-              slotProps={nativeSelectSlotProps}
-            >
-              <option value="dry-run">Dry run (check only)</option>
-              <option value="commit">Commit (save)</option>
-            </TextField>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                Compatible sheets
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                The sample has three tabs: buyer invoices, publisher payables, and expenses. Keep the header row so
+                FundLookup can match columns automatically. Extra columns are ignored.
+              </Typography>
+            </Box>
           </Box>
         ) : null}
 
         {step === 1 ? (
-          <Stack spacing={2} sx={{ maxWidth: 560 }}>
-            {source === "google" ? (
-              <>
-                {!googleConnected ? (
-                  <Alert severity="info">
-                    Connect Google Sheets from Integrations first, then return here or import from that page.
-                  </Alert>
-                ) : (
-                  <>
-                    <TextField
-                      select
-                      size="small"
-                      fullWidth
-                      label="Spreadsheet"
-                      value={spreadsheetId}
-                      onChange={(event) => onSpreadsheet(event.target.value)}
-                      slotProps={nativeSelectSlotProps}
-                    >
-                      <option value="">Select a spreadsheet</option>
-                      {files.map((file) => (
-                        <option key={file.id} value={file.id}>
-                          {file.name}
-                        </option>
-                      ))}
-                    </TextField>
-                    {filesLoaded && files.length === 0 && !loadError ? (
-                      <Typography variant="body2" color="text.secondary">
-                        No Google Sheets were found on this account. Create a sheet, then refresh this page.
-                      </Typography>
-                    ) : null}
-                    {tabs.length > 0 ? (
+          <Box
+            sx={{
+              display: "grid",
+              gap: { xs: 2, md: 3 },
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(260px, 380px) minmax(0, 1fr)" },
+              alignItems: "start",
+            }}
+          >
+            <Stack spacing={2} sx={{ minWidth: 0 }}>
+              {source === "google" ? (
+                <>
+                  {!googleConnected ? (
+                    <Alert severity="info">
+                      Connect Google Sheets from Integrations first, then return here or import from that page.
+                    </Alert>
+                  ) : (
+                    <>
                       <TextField
                         select
                         size="small"
                         fullWidth
-                        label="Sheet tab"
-                        value={sheetTitle}
-                        onChange={(event) => onTab(event.target.value)}
+                        label="Spreadsheet"
+                        value={spreadsheetId}
+                        onChange={(event) => onSpreadsheet(event.target.value)}
                         slotProps={nativeSelectSlotProps}
                       >
-                        {tabs.map((tab) => (
-                          <option key={tab} value={tab}>
-                            {tab}
+                        <option value="">Select a spreadsheet</option>
+                        {files.map((file) => (
+                          <option key={file.id} value={file.id}>
+                            {file.name}
                           </option>
                         ))}
                       </TextField>
-                    ) : null}
-                  </>
-                )}
-              </>
+                      {filesLoaded && files.length === 0 && !loadError ? (
+                        <Typography variant="body2" color="text.secondary">
+                          No Google Sheets were found on this account. Create a sheet, then refresh this page.
+                        </Typography>
+                      ) : null}
+                      {tabs.length > 0 ? (
+                        <TextField
+                          select
+                          size="small"
+                          fullWidth
+                          label="Sheet tab"
+                          value={sheetTitle}
+                          onChange={(event) => onTab(event.target.value)}
+                          slotProps={nativeSelectSlotProps}
+                        >
+                          {tabs.map((tab) => (
+                            <option key={tab} value={tab}>
+                              {tab}
+                            </option>
+                          ))}
+                        </TextField>
+                      ) : null}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Button component="label" variant="outlined" color="primary" sx={{ alignSelf: "flex-start", minHeight: 44 }}>
+                    {upload ? "Change file" : "Upload CSV or Excel"}
+                    <input
+                      hidden
+                      type="file"
+                      accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      onChange={(event) => onFile(event.target.files?.[0] ?? null)}
+                    />
+                  </Button>
+                  {upload ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-word" }}>
+                      {upload.name}
+                    </Typography>
+                  ) : null}
+                  {tabs.length > 1 ? (
+                    <TextField
+                      select
+                      size="small"
+                      fullWidth
+                      label="Sheet tab"
+                      value={sheetTitle}
+                      onChange={(event) => onFileSheet(event.target.value)}
+                      slotProps={nativeSelectSlotProps}
+                    >
+                      {tabs.map((tab) => (
+                        <option key={tab} value={tab}>
+                          {tab}
+                        </option>
+                      ))}
+                    </TextField>
+                  ) : null}
+                </>
+              )}
+              {pendingPreview ? (
+                <Typography variant="body2" color="text.secondary">
+                  Reading columns…
+                </Typography>
+              ) : null}
+              {loadError ? <Alert severity="error">{loadError}</Alert> : null}
+              {headers.length ? (
+                <Typography variant="body2" color="text.secondary">
+                  {rowCount} data row{rowCount === 1 ? "" : "s"} · {headers.length} columns
+                </Typography>
+              ) : null}
+              <Button
+                component="a"
+                href="/api/integrations/sample-workbook"
+                download="FundLookup-import-sample.xlsx"
+                variant="text"
+                color="primary"
+                sx={{ minHeight: 44, alignSelf: "start" }}
+              >
+                Download sample Excel
+              </Button>
+            </Stack>
+            {compatibility ? (
+              <CompatibilityPanel report={compatibility} sampleRow={preview[0]} />
             ) : (
-              <>
-                <Button component="label" variant="outlined" color="primary" sx={{ alignSelf: "flex-start", minHeight: 44 }}>
-                  {upload ? "Change file" : "Upload CSV or Excel"}
-                  <input
-                    hidden
-                    type="file"
-                    accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    onChange={(event) => onFile(event.target.files?.[0] ?? null)}
-                  />
-                </Button>
-                {upload ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {upload.name}
-                  </Typography>
-                ) : null}
-                {tabs.length > 1 ? (
-                  <TextField
-                    select
-                    size="small"
-                    fullWidth
-                    label="Sheet tab"
-                    value={sheetTitle}
-                    onChange={(event) => onFileSheet(event.target.value)}
-                    slotProps={nativeSelectSlotProps}
-                  >
-                    {tabs.map((tab) => (
-                      <option key={tab} value={tab}>
-                        {tab}
-                      </option>
-                    ))}
-                  </TextField>
-                ) : null}
-              </>
+              <Box
+                sx={{
+                  border: "1px dashed",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  p: 2.5,
+                  minHeight: { xs: 120, lg: 220 },
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", maxWidth: 360 }}>
+                  Pick a sheet tab to see how each column matches a FundLookup field.
+                </Typography>
+              </Box>
             )}
-            {pendingPreview ? (
-              <Typography variant="body2" color="text.secondary">
-                Reading columns…
-              </Typography>
-            ) : null}
-            {loadError ? <Alert severity="error">{loadError}</Alert> : null}
-            {headers.length ? (
-              <Typography variant="body2" color="text.secondary">
-                {rowCount} data row{rowCount === 1 ? "" : "s"} · {headers.length} columns
-              </Typography>
-            ) : null}
-          </Stack>
+          </Box>
         ) : null}
 
         {step === 2 ? (
-          <Stack spacing={2}>
+          <Stack spacing={2} sx={{ minWidth: 0 }}>
             <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-              Label each Fundlookup field with the matching column from your sheet. Required fields must be mapped.
+              Label each FundLookup field with the matching column from your sheet. Required fields must be mapped.
+              Compatibility updates as you change a match.
             </Typography>
-            <Box sx={{ display: "grid", gap: 1.5 }}>
+            {compatibility ? <CompatibilityPanel report={compatibility} sampleRow={preview[0]} /> : null}
+            <Box
+              sx={{
+                display: "grid",
+                gap: 1.5,
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr", xl: "1fr 1fr 1fr" },
+              }}
+            >
               {fields.map((field) => (
                 <TextField
                   key={field.key}
@@ -354,7 +443,7 @@ export function HistoricalImportWizard({
               ))}
             </Box>
             {preview.length ? (
-              <Box>
+              <Box sx={{ minWidth: 0 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
                   First rows
                 </Typography>
@@ -362,7 +451,12 @@ export function HistoricalImportWizard({
                   <Typography
                     key={index}
                     variant="body2"
-                    sx={{ fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, mb: 0.5 }}
+                    sx={{
+                      fontFamily: "ui-monospace, Menlo, monospace",
+                      fontSize: 12,
+                      mb: 0.5,
+                      overflowWrap: "anywhere",
+                    }}
                   >
                     {row.filter(Boolean).slice(0, 6).join(" · ") || "Empty row"}
                   </Typography>
@@ -373,7 +467,7 @@ export function HistoricalImportWizard({
         ) : null}
 
         {step === 3 ? (
-          <Stack spacing={1.25} sx={{ maxWidth: 560 }}>
+          <Stack spacing={1.25} sx={{ maxWidth: { xs: "100%", md: 640 }, minWidth: 0 }}>
             <Typography variant="body2" color="text.secondary">
               Confirm and run the import.
             </Typography>
@@ -480,13 +574,110 @@ export function HistoricalImportWizard({
   );
 }
 
+function CompatibilityPanel({
+  report,
+  sampleRow,
+}: {
+  report: ReturnType<typeof assessSheetCompatibility>;
+  sampleRow?: string[];
+}) {
+  return (
+    <Box
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2,
+        p: { xs: 1.5, md: 2 },
+        bgcolor: "background.paper",
+        minWidth: 0,
+        width: "100%",
+      }}
+    >
+      <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+        <StatusPill kind={report.ready ? "compatible" : "needs_mapping"} />
+        <Typography variant="body2" sx={{ fontWeight: 600, flex: "1 1 180px", minWidth: 0 }}>
+          {report.ready
+            ? "This sheet matches the required FundLookup fields."
+            : "Some required fields are missing. Map them on the next step, or use the sample Excel."}
+        </Typography>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+        Required {report.matchedRequired} of {report.requiredTotal} · Optional {report.matchedOptional} of{" "}
+        {report.optionalTotal}
+        {report.extraColumns.length
+          ? ` · ${report.extraColumns.length} unused column${report.extraColumns.length === 1 ? "" : "s"}`
+          : ""}
+      </Typography>
+      <Box
+        sx={{
+          display: "grid",
+          gap: 1.25,
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "repeat(2, minmax(0, 1fr))",
+            xl: "repeat(3, minmax(0, 1fr))",
+          },
+        }}
+      >
+        {report.fields.map((row) => {
+          const sample =
+            row.columnIndex != null && sampleRow?.[row.columnIndex]
+              ? String(sampleRow[row.columnIndex]).trim()
+              : "";
+          return (
+            <Stack
+              key={row.key}
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent: "space-between",
+                gap: 1,
+                alignItems: "flex-start",
+                minHeight: 44,
+                minWidth: 0,
+                p: 1.25,
+                borderRadius: 1.5,
+                bgcolor: row.required ? "var(--fr-primary-muted)" : "var(--fr-surface-muted)",
+              }}
+            >
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {row.label}
+                  {row.required ? " · required" : ""}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", lineHeight: 1.5, overflowWrap: "anywhere" }}
+                >
+                  {row.matched
+                    ? `Sheet column: ${row.column}${sample ? ` · sample: ${sample}` : ""}`
+                    : "No matching column yet"}
+                </Typography>
+              </Box>
+              <StatusPill kind={row.matched ? "matched" : "not_in_sheet"} />
+            </Stack>
+          );
+        })}
+      </Box>
+      {report.extraColumns.length ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, lineHeight: 1.5 }}>
+          Unused in FundLookup: {report.extraColumns.join(", ")}
+        </Typography>
+      ) : null}
+    </Box>
+  );
+}
+
 function Review({ label, value }: { label: string; value: string }) {
   return (
-    <Stack direction="row" sx={{ justifyContent: "space-between", gap: 2, py: 0.75 }}>
+    <Stack direction="row" sx={{ justifyContent: "space-between", gap: 2, py: 0.75, minWidth: 0 }}>
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{value}</Typography>
+      <Typography sx={{ fontSize: 14, fontWeight: 600, textAlign: "right", overflowWrap: "anywhere", minWidth: 0 }}>
+        {value}
+      </Typography>
     </Stack>
   );
 }
