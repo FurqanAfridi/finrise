@@ -29,7 +29,7 @@ export default async function PublisherDetailPage({ params }: { params: Promise<
       where: { id, tenantId: ctx.tenantId },
       include: {
         verticalOffers: { include: { vertical: { select: { name: true } } }, orderBy: { vertical: { name: "asc" } } },
-        _count: { select: { invoices: true } },
+        _count: { select: { invoices: true, dailyFigures: true } },
       },
     }),
     getDirectoryOptions(ctx.tenantId),
@@ -113,7 +113,8 @@ export default async function PublisherDetailPage({ params }: { params: Promise<
               kind="publisher"
               contactId={publisher.id}
               isActive={publisher.isActive}
-              hasInvoices={publisher._count.invoices > 0}
+              hasInvoices={publisher._count.invoices > 0 || publisher._count.dailyFigures > 0}
+              canDeleteWithHistory={ctx.tenantRole === "ADMIN" || ctx.platformRole === "ADMIN"}
             />
           </Stack>
         </MainCard>

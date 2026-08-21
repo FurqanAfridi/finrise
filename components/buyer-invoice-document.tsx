@@ -2,7 +2,7 @@ import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { bankPaymentLines, type CompanyBranding } from "@/lib/company-branding";
+import { paymentDetailLines, type CompanyBranding } from "@/lib/company-branding";
 import { displayDate } from "@/lib/dates";
 import { formatNetTerms } from "@/lib/finance/invoice";
 import { invoiceOnAccent, normalizeInvoiceColor } from "@/lib/invoice-theme";
@@ -53,7 +53,7 @@ export function BuyerInvoiceDocument({
   const issueDate = invoice.periodEnd ?? invoice.periodStart ?? invoice.createdAt;
   const accent = normalizeInvoiceColor(branding.invoiceColor);
   const onAccent = invoiceOnAccent(accent);
-  const bankLines = bankPaymentLines(branding);
+  const bankLines = paymentDetailLines(branding);
   const terms = formatNetTerms(invoice.paymentTermsDays);
 
   return (

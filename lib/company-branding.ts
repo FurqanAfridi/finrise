@@ -18,6 +18,10 @@ export type CompanyBranding = {
   bankRoutingNumber: string | null;
   bankIban: string | null;
   bankSwift: string | null;
+  cardHolderName: string | null;
+  cardBrand: string | null;
+  cardNumber: string | null;
+  cardExpiry: string | null;
   paymentNotes: string | null;
   invoiceColor: string;
   termsAndConditions: string | null;
@@ -32,6 +36,7 @@ export type CompanyBranding = {
   logoSrc: string | null;
   hasLogo: boolean;
   hasBank: boolean;
+  hasCard: boolean;
 };
 
 export type BankPaymentLine = { label: string; value: string };
@@ -51,6 +56,10 @@ type ProfileRow = {
   bankRoutingNumber: string | null;
   bankIban: string | null;
   bankSwift: string | null;
+  cardHolderName: string | null;
+  cardBrand: string | null;
+  cardNumber: string | null;
+  cardExpiry: string | null;
   paymentNotes: string | null;
   invoiceColor: string | null;
   termsAndConditions: string | null;
@@ -68,6 +77,11 @@ function toDataUrl(mime: string | null, data: Uint8Array | Buffer | null) {
   return `data:${mime || "image/png"};base64,${buffer.toString("base64")}`;
 }
 
+export function formatCardNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
+}
+
 export function bankPaymentLines(branding: CompanyBranding): BankPaymentLine[] {
   const lines: BankPaymentLine[] = [];
   if (branding.bankName) lines.push({ label: "Bank name", value: branding.bankName });
@@ -80,6 +94,16 @@ export function bankPaymentLines(branding: CompanyBranding): BankPaymentLine[] {
   if (lines.length === 0 && branding.bankDetails) {
     lines.push({ label: "Bank details", value: branding.bankDetails });
   }
+  return lines;
+}
+
+/** Bank and card lines printed on invoices and emails. */
+export function paymentDetailLines(branding: CompanyBranding): BankPaymentLine[] {
+  const lines = bankPaymentLines(branding);
+  if (branding.cardBrand) lines.push({ label: "Card brand", value: branding.cardBrand });
+  if (branding.cardHolderName) lines.push({ label: "Cardholder", value: branding.cardHolderName });
+  if (branding.cardNumber) lines.push({ label: "Card number", value: formatCardNumber(branding.cardNumber) });
+  if (branding.cardExpiry) lines.push({ label: "Card expiry", value: branding.cardExpiry });
   return lines;
 }
 
@@ -101,6 +125,10 @@ export async function getCompanyBranding(tenantId: string, tenantName: string): 
         "bankRoutingNumber",
         "bankIban",
         "bankSwift",
+        "cardHolderName",
+        "cardBrand",
+        "cardNumber",
+        "cardExpiry",
         "paymentNotes",
         "invoiceColor",
         "termsAndConditions",
@@ -120,6 +148,8 @@ export async function getCompanyBranding(tenantId: string, tenantName: string): 
   const bankName = profile?.bankName ?? null;
   const bankAccountNumber = profile?.bankAccountNumber ?? null;
   const bankIban = profile?.bankIban ?? null;
+  const cardNumber = profile?.cardNumber ?? null;
+  const cardHolderName = profile?.cardHolderName ?? null;
   const invoiceColor = /^#[0-9A-Fa-f]{6}$/.test(profile?.invoiceColor ?? "")
     ? (profile?.invoiceColor as string).toUpperCase()
     : DEFAULT_INVOICE_COLOR;
@@ -139,6 +169,10 @@ export async function getCompanyBranding(tenantId: string, tenantName: string): 
     bankRoutingNumber: profile?.bankRoutingNumber ?? null,
     bankIban,
     bankSwift: profile?.bankSwift ?? null,
+    cardHolderName,
+    cardBrand: profile?.cardBrand ?? null,
+    cardNumber,
+    cardExpiry: profile?.cardExpiry ?? null,
     paymentNotes: profile?.paymentNotes ?? null,
     invoiceColor,
     termsAndConditions: profile?.termsAndConditions ?? null,
@@ -151,6 +185,7 @@ export async function getCompanyBranding(tenantId: string, tenantName: string): 
     logoSrc: toDataUrl(profile?.logoMime ?? null, profile?.logoData ?? null),
     hasLogo: Boolean(profile?.logoData && profile.logoData.length > 0),
     hasBank: Boolean(bankName && (bankAccountNumber || bankIban)),
+    hasCard: Boolean(cardHolderName && cardNumber),
   };
 }
 

@@ -7,7 +7,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { TenantRole } from "@prisma/client";
-import { CompanyBankCompleteForm, CompanyExtrasForm, FinanceSettingsForm } from "@/components/company-extras-form";
+import { CompanyBankCompleteForm, CompanyCardForm, CompanyExtrasForm, CompanyIdentityForm, FinanceSettingsForm } from "@/components/company-extras-form";
 import { InviteForm } from "@/components/invite-form";
 import { PageHeader } from "@/components/page-header";
 import { CompaniesPanel } from "@/components/settings/companies-panel";
@@ -15,12 +15,9 @@ import { HistoricalImportWizard } from "@/components/integrations/historical-imp
 import { ProfileForm } from "@/components/settings/profile-form";
 import { SettingsHashRedirect } from "@/components/settings/hash-redirect";
 import {
-  LockedChip,
   SettingsPersonRow,
-  SettingsRow,
   SettingsSection,
   SettingsTabs,
-  SettingsValue,
 } from "@/components/settings/settings-ui";
 import { SmtpSettingsForm } from "@/components/smtp-form";
 import { getCompanyBranding } from "@/lib/company-branding";
@@ -32,7 +29,6 @@ import { listInvoiceEmailLogs, listSmtpMailboxes } from "@/lib/smtp";
 import { PERSONAL_SETTINGS_TABS, SETTINGS_TABS, parseSettingsTab } from "@/lib/settings-tabs";
 import { TENANT_ROLE_LABEL } from "@/lib/status";
 import { requireTenant, requireTenantAdmin } from "@/lib/tenant";
-import { routingFieldLabel } from "@/lib/validation";
 
 export default async function SettingsPage({
   searchParams,
@@ -114,72 +110,47 @@ export default async function SettingsPage({
 
       {tab === "company" ? (
         <>
-          <SettingsSection
-            title="Company identity"
-            description="Set at signup and printed on every invoice. These cannot be edited again."
-          >
-            <SettingsRow label="Company name" hint="Legal name buyers see on invoices." action={<LockedChip />}>
-              <SettingsValue>{branding.legalName}</SettingsValue>
-            </SettingsRow>
-            <SettingsRow label="Email" hint="Locked company email. Set a different invoice email under Branding." action={<LockedChip />}>
-              <SettingsValue>{branding.email || "Not set"}</SettingsValue>
-            </SettingsRow>
-            <SettingsRow label="Phone" hint="Locked company phone. Set a different invoice phone under Branding." action={<LockedChip />}>
-              <SettingsValue>{branding.phone || "Not set"}</SettingsValue>
-            </SettingsRow>
-            <SettingsRow label="Country" action={<LockedChip />}>
-              <SettingsValue>{branding.countryLabel || "Not set"}</SettingsValue>
-            </SettingsRow>
-            <SettingsRow label="Address" align="start" action={<LockedChip />}>
-              <SettingsValue>{branding.address || "Not set"}</SettingsValue>
-            </SettingsRow>
-            <SettingsRow label="Zip code" action={<LockedChip />}>
-              <SettingsValue>{branding.zipCode || "Not set"}</SettingsValue>
-            </SettingsRow>
-          </SettingsSection>
+          <CompanyIdentityForm
+            defaults={{
+              name: branding.legalName,
+              email: branding.email,
+              phone: branding.phone,
+              country: branding.country,
+              address: branding.address,
+              zipCode: branding.zipCode,
+            }}
+          />
 
           <SettingsSection
             title="Bank account"
-            description="Buyers use these details to pay invoices. Saved once, then locked."
+            description="Buyers can pay invoices by bank transfer using these details."
           >
-            {branding.hasBank ? (
-              <>
-                <SettingsRow label="Bank name" action={<LockedChip />}>
-                  <SettingsValue>{branding.bankName}</SettingsValue>
-                </SettingsRow>
-                {branding.bankAccountNumber ? (
-                  <SettingsRow label="Account number" action={<LockedChip />}>
-                    <SettingsValue>{branding.bankAccountNumber}</SettingsValue>
-                  </SettingsRow>
-                ) : null}
-                {branding.bankRoutingNumber ? (
-                  <SettingsRow label={routingFieldLabel(branding.country || "")} action={<LockedChip />}>
-                    <SettingsValue>{branding.bankRoutingNumber}</SettingsValue>
-                  </SettingsRow>
-                ) : null}
-                {branding.bankIban ? (
-                  <SettingsRow label="IBAN" action={<LockedChip />}>
-                    <SettingsValue>{branding.bankIban}</SettingsValue>
-                  </SettingsRow>
-                ) : null}
-                {branding.bankSwift ? (
-                  <SettingsRow label="SWIFT / BIC" action={<LockedChip />}>
-                    <SettingsValue>{branding.bankSwift}</SettingsValue>
-                  </SettingsRow>
-                ) : null}
-              </>
-            ) : (
-              <CompanyBankCompleteForm
-                country={branding.country || "US"}
-                defaults={{
-                  bankName: branding.bankName,
-                  bankAccountNumber: branding.bankAccountNumber,
-                  bankRoutingNumber: branding.bankRoutingNumber,
-                  bankIban: branding.bankIban,
-                  bankSwift: branding.bankSwift,
-                }}
-              />
-            )}
+            <CompanyBankCompleteForm
+              country={branding.country || "US"}
+              hasBank={branding.hasBank}
+              defaults={{
+                bankName: branding.bankName,
+                bankAccountNumber: branding.bankAccountNumber,
+                bankRoutingNumber: branding.bankRoutingNumber,
+                bankIban: branding.bankIban,
+                bankSwift: branding.bankSwift,
+              }}
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title="Credit card"
+            description="Optional. Buyers can also pay using the company card printed on the invoice."
+          >
+            <CompanyCardForm
+              hasCard={branding.hasCard}
+              defaults={{
+                cardHolderName: branding.cardHolderName,
+                cardBrand: branding.cardBrand,
+                cardNumber: branding.cardNumber,
+                cardExpiry: branding.cardExpiry,
+              }}
+            />
           </SettingsSection>
         </>
       ) : null}

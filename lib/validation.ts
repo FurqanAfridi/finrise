@@ -479,3 +479,48 @@ export function parseCompanyIdentity(input: {
     bank: bank.value,
   });
 }
+
+const CARD_BRANDS = ["Visa", "Mastercard", "American Express", "Discover", "Other"] as const;
+
+export function parseCardBrand(value: string): FieldResult<string | null> {
+  const brand = value.trim();
+  if (!brand) return ok(null);
+  if (!(CARD_BRANDS as readonly string[]).includes(brand)) return err("Choose a card brand.");
+  return ok(brand);
+}
+
+export function parseCardNumber(value: string): FieldResult<string> {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return err("Card number is required.");
+  if (digits.length < 13 || digits.length > 19) return err("Card number must be 13 to 19 digits.");
+  return ok(digits);
+}
+
+export function parseCardExpiry(value: string): FieldResult<string> {
+  const raw = value.trim();
+  if (!raw) return err("Card expiry is required.");
+  const match = raw.match(/^(\d{1,2})\s*[/.-]\s*(\d{2}|\d{4})$/);
+  if (!match) return err("Use MM/YY for card expiry.");
+  const month = Number(match[1]);
+  let year = Number(match[2]);
+  if (month < 1 || month > 12) return err("Card expiry month must be 1 to 12.");
+  if (year < 100) year += 2000;
+  return ok(`${String(month).padStart(2, "0")}/${String(year).slice(-2)}`);
+}
+
+export function parseCardFromForm(formData: FormData) {
+  const holder = tagged("cardHolderName", parsePersonName(formField(formData, "cardHolderName"), "Cardholder name"));
+  if (!holder.ok) return holder;
+  const brand = tagged("cardBrand", parseCardBrand(formField(formData, "cardBrand")));
+  if (!brand.ok) return brand;
+  const number = tagged("cardNumber", parseCardNumber(formField(formData, "cardNumber")));
+  if (!number.ok) return number;
+  const expiry = tagged("cardExpiry", parseCardExpiry(formField(formData, "cardExpiry")));
+  if (!expiry.ok) return expiry;
+  return ok({
+    cardHolderName: holder.value,
+    cardBrand: brand.value,
+    cardNumber: number.value,
+    cardExpiry: expiry.value,
+  });
+}

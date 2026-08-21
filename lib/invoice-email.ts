@@ -1,5 +1,5 @@
 import { APP_NAME } from "@/lib/brand";
-import { bankPaymentLines, type CompanyBranding } from "@/lib/company-branding";
+import { paymentDetailLines, type CompanyBranding } from "@/lib/company-branding";
 import { displayDate } from "@/lib/dates";
 import { formatNetTerms } from "@/lib/finance/invoice";
 import { invoiceOnAccent, normalizeInvoiceColor } from "@/lib/invoice-theme";
@@ -53,7 +53,7 @@ export function invoiceEmailContent(
   const number = invoice.invoiceNumber || "Invoice";
   const subject = `Invoice ${number} from ${branding.legalName}`;
   const terms = formatNetTerms(invoice.paymentTermsDays);
-  const bankLines = bankPaymentLines(branding);
+  const bankLines = paymentDetailLines(branding);
   const accent = normalizeInvoiceColor(branding.invoiceColor);
   const onAccent = invoiceOnAccent(accent);
 

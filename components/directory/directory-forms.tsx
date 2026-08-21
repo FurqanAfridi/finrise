@@ -149,30 +149,56 @@ export function ContactLifecycleActions({
   contactId,
   isActive,
   hasInvoices,
+  canDeleteWithHistory,
 }: {
   kind: "buyer" | "publisher";
   contactId: string;
   isActive: boolean;
   hasInvoices: boolean;
+  canDeleteWithHistory?: boolean;
 }) {
+  const [state, action] = useActionState(removeContact, {} as { error?: string });
+  const canDelete = !hasInvoices || canDeleteWithHistory;
+  const label = kind === "buyer" ? "buyer" : "publisher";
+
   return (
-    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-      <Box component="form" action={setContactActive}>
-        <input type="hidden" name="kind" value={kind} />
-        <input type="hidden" name="contactId" value={contactId} />
-        <input type="hidden" name="isActive" value={isActive ? "false" : "true"} />
-        <Button type="submit" size="small" variant="outlined" sx={{ minHeight: 44 }}>
-          {isActive ? "Deactivate" : "Reactivate"}
-        </Button>
-      </Box>
-      {!hasInvoices ? (
-        <Box component="form" action={removeContact}>
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+        <Box component="form" action={setContactActive}>
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="contactId" value={contactId} />
-          <Button type="submit" size="small" color="error" variant="text" sx={{ minHeight: 44 }}>
-            Remove
+          <input type="hidden" name="isActive" value={isActive ? "false" : "true"} />
+          <Button type="submit" size="small" variant="outlined" sx={{ minHeight: 44 }}>
+            {isActive ? "Deactivate" : "Reactivate"}
           </Button>
         </Box>
+        {canDelete ? (
+          <Box
+            component="form"
+            action={action}
+            onSubmit={(event) => {
+              const message = hasInvoices
+                ? `This deletes the ${label} and their invoices and daily figures. This cannot be undone.`
+                : `Remove this ${label}?`;
+              if (!window.confirm(message)) event.preventDefault();
+            }}
+          >
+            <input type="hidden" name="kind" value={kind} />
+            <input type="hidden" name="contactId" value={contactId} />
+            <Button type="submit" size="small" color="error" variant="text" sx={{ minHeight: 44 }}>
+              Delete {label}
+            </Button>
+          </Box>
+        ) : (
+          <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center", maxWidth: 360, lineHeight: 1.5 }}>
+            This {label} has invoices or daily figures. A company admin can delete them, or you can deactivate the {label}.
+          </Typography>
+        )}
+      </Stack>
+      {state.error ? (
+        <Typography variant="body2" color="error" sx={{ lineHeight: 1.5 }}>
+          {state.error}
+        </Typography>
       ) : null}
     </Stack>
   );

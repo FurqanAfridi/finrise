@@ -1,7 +1,7 @@
 import { createRequire } from "module";
 import { join } from "path";
 import type { CompanyBranding } from "@/lib/company-branding";
-import { bankPaymentLines } from "@/lib/company-branding";
+import { paymentDetailLines } from "@/lib/company-branding";
 import { displayDate } from "@/lib/dates";
 import { formatNetTerms } from "@/lib/finance/invoice";
 import { normalizeInvoiceColor } from "@/lib/invoice-theme";
@@ -50,7 +50,7 @@ export async function buildInvoicePdf(
   const issueDate = invoice.periodEnd ?? invoice.periodStart ?? invoice.createdAt;
   const number = invoice.invoiceNumber || "Invoice";
   const accentHex = normalizeInvoiceColor(branding.invoiceColor);
-  const bankLines = bankPaymentLines(branding);
+  const bankLines = paymentDetailLines(branding);
 
   const doc = new PDFDocument({ size: "A4", margin: 50 });
   const chunks: Buffer[] = [];

@@ -84,7 +84,7 @@ export function CompaniesPanel({
       <Grid size={{ xs: 12, md: 6 }}>
         <MainCard title="Create a company" contentSX={{ display: "grid", gap: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            You become the admin. Company name, address, and contact details are locked after create.
+            You become the admin. You can edit company and bank details later in Settings.
           </Typography>
           <CompanyCreateForm submitLabel="Create company" />
         </MainCard>

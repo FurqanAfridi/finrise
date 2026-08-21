@@ -29,7 +29,7 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
       where: { id, tenantId: ctx.tenantId },
       include: {
         verticalOffers: { include: { vertical: { select: { name: true } } }, orderBy: { vertical: { name: "asc" } } },
-        _count: { select: { invoices: true } },
+        _count: { select: { invoices: true, dailyFigures: true } },
       },
     }),
     getDirectoryOptions(ctx.tenantId),
@@ -105,7 +105,8 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
               kind="buyer"
               contactId={buyer.id}
               isActive={buyer.isActive}
-              hasInvoices={buyer._count.invoices > 0}
+              hasInvoices={buyer._count.invoices > 0 || buyer._count.dailyFigures > 0}
+              canDeleteWithHistory={ctx.tenantRole === "ADMIN" || ctx.platformRole === "ADMIN"}
             />
           </Stack>
         </MainCard>

@@ -1,15 +1,18 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { saveCompanyBankAction, saveCompanyProfile, saveSettings } from "@/app/actions/ops";
+import { saveCompanyBankAction, saveCompanyCardAction, saveCompanyIdentityAction, saveCompanyProfile, saveSettings, clearCompanyBankAction, clearCompanyCardAction } from "@/app/actions/ops";
 import { BankFields, type BankFieldValues } from "@/components/bank-fields";
 import { DayOfMonthSelect, NativeSelect, NetDaysSelect, TextInput } from "@/components/forms";
 import { SettingsRow, SettingsSection } from "@/components/settings/settings-ui";
+import { COUNTRIES, countryDial, nationalPhoneDigits } from "@/lib/countries";
+import { formatCardNumber } from "@/lib/company-branding";
 import { DEFAULT_INVOICE_COLOR } from "@/lib/invoice-theme";
 
 function InvoiceColorField({ defaultValue }: { defaultValue: string }) {
@@ -121,7 +124,7 @@ export function CompanyExtrasForm({
 
       <SettingsSection
         title="Invoice contact"
-        description="These print on invoices. They can differ from the locked company email and phone. Leave a field blank to use the company detail instead."
+        description="These print on invoices. They can differ from the company email and phone. Leave a field blank to use the company detail instead."
       >
         <SettingsRow
           label="Representative name"
@@ -206,31 +209,252 @@ export function CompanyExtrasForm({
   );
 }
 
+export function CompanyIdentityForm({
+  defaults,
+}: {
+  defaults: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    country?: string | null;
+    address?: string | null;
+    zipCode?: string | null;
+  };
+}) {
+  const [state, action] = useActionState(saveCompanyIdentityAction, {});
+  const [country, setCountry] = useState(defaults.country || "US");
+  const dial = useMemo(() => countryDial(country) || "+1", [country]);
+  const errors = state.fieldErrors ?? {};
+
+  return (
+    <Box component="form" action={action} sx={{ mb: 5 }}>
+      <SettingsSection
+        title="Company identity"
+        description="Printed on invoices. Company admins can update these whenever the legal name, address, or contact details change."
+      >
+        <SettingsRow label="Company name" hint="Legal name buyers see on invoices.">
+          <TextInput
+            label="Company name"
+            name="name"
+            required
+            maxLength={120}
+            defaultValue={defaults.name}
+            hideLabel
+            autoComplete="organization"
+            errorMessage={errors.name}
+          />
+        </SettingsRow>
+        <SettingsRow label="Email" hint="Company email. Invoice emails can still use a different address under Branding.">
+          <TextInput
+            label="Email"
+            name="email"
+            type="email"
+            maxLength={254}
+            defaultValue={defaults.email ?? ""}
+            hideLabel
+            autoComplete="email"
+            errorMessage={errors.email}
+          />
+        </SettingsRow>
+        <SettingsRow label="Country" hint="Used for phone, zip, and bank account format.">
+          <NativeSelect
+            name="country"
+            label="Country"
+            required
+            hideLabel
+            value={country}
+            onChange={(event) => setCountry(event.target.value)}
+            errorMessage={errors.country}
+          >
+            {COUNTRIES.map((row) => (
+              <option key={row.code} value={row.code}>
+                {row.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </SettingsRow>
+        <SettingsRow label="Phone" hint="Digits only, without the country code.">
+          <TextInput
+            label="Phone"
+            name="phone"
+            required
+            kind="phone"
+            hideLabel
+            defaultValue={nationalPhoneDigits(defaults.phone, defaults.country || country)}
+            errorMessage={errors.phone}
+            startAdornment={<InputAdornment position="start">{dial}</InputAdornment>}
+          />
+        </SettingsRow>
+        <SettingsRow label="Address" hint="Street address printed on invoices." align="start">
+          <TextInput
+            label="Address"
+            name="address"
+            required
+            maxLength={200}
+            defaultValue={defaults.address ?? ""}
+            hideLabel
+            autoComplete="street-address"
+            errorMessage={errors.address}
+          />
+        </SettingsRow>
+        <SettingsRow label="Zip code">
+          <TextInput
+            label="Zip code"
+            name="zipCode"
+            required
+            maxLength={12}
+            defaultValue={defaults.zipCode ?? ""}
+            hideLabel
+            errorMessage={errors.zipCode}
+          />
+        </SettingsRow>
+      </SettingsSection>
+      {state.error && !state.fieldErrors ? (
+        <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+          {state.error}
+        </Typography>
+      ) : null}
+      <Button type="submit" variant="contained" color="secondary" sx={{ minHeight: 44 }}>
+        Save company details
+      </Button>
+    </Box>
+  );
+}
+
 export function CompanyBankCompleteForm({
   country,
   defaults,
+  hasBank,
 }: {
   country: string;
   defaults?: BankFieldValues;
+  hasBank?: boolean;
 }) {
   const [state, action] = useActionState(saveCompanyBankAction, {});
 
   return (
-    <Box component="form" action={action} sx={{ px: 3, py: 2.5, display: "grid", gap: 2 }}>
+    <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5, display: "grid", gap: 2 }}>
       <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-        Add the account buyers should pay. It is printed on invoices and cannot be changed later.
+        Add the account buyers should pay by bank transfer. It is printed on invoices. You can edit or remove it later.
       </Typography>
-      <BankFields country={country} defaults={defaults} size="small" fieldErrors={state.fieldErrors} />
-      {state.error && !state.fieldErrors ? (
-        <Typography color="error" variant="body2">
-          {state.error}
-        </Typography>
-      ) : null}
-      <Box>
-        <Button type="submit" variant="contained" color="secondary">
-          Save bank account
-        </Button>
+      <Box component="form" action={action} sx={{ display: "grid", gap: 2 }}>
+        <input type="hidden" name="country" value={country} />
+        <BankFields key={country} country={country} defaults={defaults} size="small" fieldErrors={state.fieldErrors} />
+        {state.error && !state.fieldErrors ? (
+          <Typography color="error" variant="body2">
+            {state.error}
+          </Typography>
+        ) : null}
+        <Box>
+          <Button type="submit" variant="contained" color="secondary" sx={{ minHeight: 44 }}>
+            Save bank account
+          </Button>
+        </Box>
       </Box>
+      {hasBank ? (
+        <form
+          action={clearCompanyBankAction}
+          onSubmit={(event) => {
+            if (!window.confirm("Remove the bank account from invoices? You can add a new one after this.")) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <Button type="submit" color="error" variant="text" sx={{ minHeight: 44 }}>
+            Remove bank account
+          </Button>
+        </form>
+      ) : null}
+    </Box>
+  );
+}
+
+export function CompanyCardForm({
+  defaults,
+  hasCard,
+}: {
+  defaults?: {
+    cardHolderName?: string | null;
+    cardBrand?: string | null;
+    cardNumber?: string | null;
+    cardExpiry?: string | null;
+  };
+  hasCard?: boolean;
+}) {
+  const [state, action] = useActionState(saveCompanyCardAction, {});
+  const errors = state.fieldErrors ?? {};
+
+  return (
+    <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5, display: "grid", gap: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+        Optional. Print a company card on invoices so buyers can pay by credit card. Do not store a CVV.
+      </Typography>
+      <Box component="form" action={action} sx={{ display: "grid", gap: 2, gridTemplateColumns: { sm: "1fr 1fr" } }}>
+        <Box sx={{ gridColumn: { sm: "1 / -1" } }}>
+          <TextInput
+            label="Cardholder name"
+            name="cardHolderName"
+            required
+            kind="letters"
+            maxLength={80}
+            defaultValue={defaults?.cardHolderName ?? ""}
+            errorMessage={errors.cardHolderName}
+          />
+        </Box>
+        <NativeSelect label="Card brand" name="cardBrand" defaultValue={defaults?.cardBrand ?? ""} errorMessage={errors.cardBrand}>
+          <option value="">Select brand</option>
+          <option value="Visa">Visa</option>
+          <option value="Mastercard">Mastercard</option>
+          <option value="American Express">American Express</option>
+          <option value="Discover">Discover</option>
+          <option value="Other">Other</option>
+        </NativeSelect>
+        <TextInput
+          label="Expiry (MM/YY)"
+          name="cardExpiry"
+          required
+          placeholder="08/28"
+          defaultValue={defaults?.cardExpiry ?? ""}
+          maxLength={7}
+          errorMessage={errors.cardExpiry}
+        />
+        <Box sx={{ gridColumn: { sm: "1 / -1" } }}>
+          <TextInput
+            label="Card number"
+            name="cardNumber"
+            required
+            placeholder="Digits only"
+            defaultValue={defaults?.cardNumber ? formatCardNumber(defaults.cardNumber) : ""}
+            maxLength={23}
+            errorMessage={errors.cardNumber}
+            sanitize={(value) => value.replace(/[^\d\s]/g, "")}
+          />
+        </Box>
+        {state.error && !state.fieldErrors ? (
+          <Typography color="error" variant="body2" sx={{ gridColumn: "1 / -1" }}>
+            {state.error}
+          </Typography>
+        ) : null}
+        <Box sx={{ gridColumn: "1 / -1" }}>
+          <Button type="submit" variant="contained" color="secondary" sx={{ minHeight: 44 }}>
+            Save credit card
+          </Button>
+        </Box>
+      </Box>
+      {hasCard ? (
+        <form
+          action={clearCompanyCardAction}
+          onSubmit={(event) => {
+            if (!window.confirm("Remove the credit card from invoices? You can add a new one after this.")) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <Button type="submit" color="error" variant="text" sx={{ minHeight: 44 }}>
+            Remove credit card
+          </Button>
+        </form>
+      ) : null}
     </Box>
   );
 }

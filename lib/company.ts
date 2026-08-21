@@ -36,6 +36,58 @@ export async function findExistingCompany(name: string, exceptTenantId?: string)
   });
 }
 
+export type CompanyIdentityDetails = {
+  name: string;
+  email?: string | null;
+  phone: string;
+  address: string;
+  country: string;
+  zipCode: string;
+};
+
+export async function updateCompanyIdentity(tenantId: string, details: CompanyIdentityDetails) {
+  const name = details.name.trim();
+  const existing = await findExistingCompany(name, tenantId);
+  if (existing) {
+    return {
+      error: "A company with this name already exists. Choose a different name.",
+    } as const;
+  }
+
+  const slug = slugifyCompanyName(name);
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { name, slug },
+  });
+  await prisma.setting.upsert({
+    where: { tenantId_key: { tenantId, key: "companyName" } },
+    update: { value: name },
+    create: { tenantId, key: "companyName", value: name },
+  });
+  await prisma.$executeRaw`
+    INSERT INTO "CompanyProfile" (
+      "tenantId", "legalName", email, phone, address, country, "zipCode"
+    )
+    VALUES (
+      ${tenantId},
+      ${name},
+      ${details.email ?? null},
+      ${details.phone},
+      ${details.address},
+      ${details.country},
+      ${details.zipCode}
+    )
+    ON CONFLICT ("tenantId") DO UPDATE SET
+      "legalName" = EXCLUDED."legalName",
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      address = EXCLUDED.address,
+      country = EXCLUDED.country,
+      "zipCode" = EXCLUDED."zipCode"
+  `;
+  return { ok: true as const };
+}
+
 export async function createCompanyForUser(userId: string, details: CompanyDetails, email?: string | null) {
   const name = details.name.trim();
   const existing = await findExistingCompany(name);

@@ -23,7 +23,7 @@ export default function SignupPage() {
               Create your account
             </Typography>
             <Typography variant="caption" sx={{ fontSize: 16, color: "text.secondary", textAlign: "center" }}>
-              Company details and bank account are set once at signup and printed on invoices. They cannot be changed later.
+              Company details and bank account are printed on invoices. A company admin can edit them later in Settings.
             </Typography>
             <SignupForm />
             <Divider sx={{ width: 1 }} />

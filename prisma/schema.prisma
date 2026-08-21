@@ -550,6 +550,10 @@ model CompanyProfile {
   invoiceEmail               String?
   invoicePhone               String?
   invoiceRepresentativeName  String?
+  cardHolderName             String?
+  cardBrand                  String?
+  cardNumber                 String?
+  cardExpiry                 String?
 }
 
 model PartnerPayout {

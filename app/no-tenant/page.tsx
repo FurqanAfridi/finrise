@@ -31,7 +31,7 @@ export default async function NoTenantPage() {
           Create your first company
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Company details are set once and cannot be changed. If this company already exists, ask an admin for an invite.
+          Set your company name, address, and bank account. You can edit these later in Settings. If this company already exists, ask an admin for an invite.
         </Typography>
         <CompanyCreateForm />
       </MainCard>

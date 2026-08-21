@@ -3,22 +3,33 @@
 import Link from "next/link";
 import Box from "@mui/material/Box";
 import TableRow from "@mui/material/TableRow";
+import Typography from "@mui/material/Typography";
 
-export function ContactTableRow({ href, children }: { href: string; children: React.ReactNode }) {
+export function ContactTableRow({ children }: { children: React.ReactNode }) {
+  return <TableRow hover>{children}</TableRow>;
+}
+
+export function ContactNameLink({ href, name, email }: { href: string; name: string; email?: string | null }) {
   return (
-    <TableRow
-      hover
+    <Box
       component={Link}
       href={href}
       sx={{
-        cursor: "pointer",
         textDecoration: "none",
         color: "inherit",
-        "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+        display: "block",
+        minHeight: 44,
+        py: 0.5,
+        "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
       }}
     >
-      {children}
-    </TableRow>
+      <Typography variant="body2" sx={{ fontWeight: 600, color: "primary.main" }}>
+        {name}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {email || "No email"}
+      </Typography>
+    </Box>
   );
 }
 
@@ -28,6 +39,8 @@ export function ContactCardLink({ href, children }: { href: string; children: Re
       component={Link}
       href={href}
       sx={{
+        flex: 1,
+        minWidth: 0,
         p: 2,
         border: "1px solid",
         borderColor: "divider",

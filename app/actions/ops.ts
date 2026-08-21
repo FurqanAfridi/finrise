@@ -12,7 +12,7 @@ import { convertedAmount } from "@/lib/finance/partnerLedger";
 import { money } from "@/lib/finance/decimal";
 import { lockedFinanceError, lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
-import { createCompanyForUser } from "@/lib/company";
+import { createCompanyForUser, updateCompanyIdentity } from "@/lib/company";
 import {
   addBuyerVerticalOffer,
   addPublisherVerticalOffer,
@@ -26,9 +26,12 @@ import { inviteEmailContent } from "@/lib/invite-email";
 import { INVITE_FROM_EMAIL, platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
 import {
   formField,
+  parseAddress,
   parseBankFromForm,
+  parseCardFromForm,
   parseCompanyIdentity,
   parseCompanyName,
+  parseCountry,
   parseCurrency,
   parseEmail,
   parseFormDate,
@@ -40,10 +43,12 @@ import {
   parsePassword,
   parsePercent,
   parsePersonName,
+  parsePhone,
   parseSharePercent,
   parseTaxId,
   parseTermsAndConditions,
   parseWebsite,
+  parseZipCode,
 } from "@/lib/validation";
 import { identityInvalid, invalid, invalidResult, type FormActionState } from "@/lib/form-state";
 
@@ -56,6 +61,10 @@ function dec(formData: FormData, key: string) {
   const parsed = parseMoney(String(formData.get(key) ?? ""), key, false);
   if (!parsed.ok) return Number.NaN;
   return parsed.value;
+}
+
+function isCompanyAdmin(ctx: { tenantRole: string; platformRole: string }) {
+  return ctx.platformRole === "ADMIN" || ctx.tenantRole === "ADMIN";
 }
 
 function hasInvalidNumber(...values: Array<number | null | undefined>) {
@@ -255,48 +264,102 @@ export async function setContactActive(formData: FormData) {
   revalidatePath(kind === "publisher" ? `/directory/publishers/${contactId}` : `/directory/buyers/${contactId}`);
 }
 
-export async function removeContact(formData: FormData) {
+export async function removeContact(
+  _prev: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
   const ctx = await requireBrokerOps();
   const kind = str(formData, "kind");
   const contactId = str(formData, "contactId");
-  if (!kind || !contactId) return;
-  let deleted = false;
+  if (!kind || !contactId) return { error: "Choose a contact to remove." };
+  const admin = isCompanyAdmin(ctx);
 
   if (kind === "buyer") {
-    const invoices = await prisma.buyerInvoice.count({ where: { buyerId: contactId, tenantId: ctx.tenantId } });
-    if (invoices > 0) {
-      await prisma.buyer.updateMany({
-        where: { id: contactId, tenantId: ctx.tenantId },
-        data: { isActive: false },
-      });
+    const invoices = await prisma.buyerInvoice.findMany({
+      where: { buyerId: contactId, tenantId: ctx.tenantId },
+      select: { periodStart: true, periodEnd: true, dueDate: true, invoiceDate: true },
+    });
+    const figures = await prisma.buyerDailyFigure.findMany({
+      where: { buyerId: contactId, tenantId: ctx.tenantId },
+      select: { figureDate: true },
+    });
+    if (invoices.length > 0 || figures.length > 0) {
+      if (!admin) {
+        return {
+          error: "This buyer has invoices or daily figures. A company admin can delete them, or you can deactivate the buyer.",
+        };
+      }
+      const closed = lockedFinanceErrorForDates([
+        ...invoices.flatMap((row) => [row.periodStart, row.periodEnd, row.dueDate, row.invoiceDate]),
+        ...figures.map((row) => row.figureDate),
+      ]);
+      if (closed) {
+        return {
+          error: `${closed} Deactivate this buyer instead of deleting, so closed months stay intact.`,
+        };
+      }
+      await prisma.$transaction([
+        prisma.buyerInvoice.deleteMany({ where: { buyerId: contactId, tenantId: ctx.tenantId } }),
+        prisma.invite.deleteMany({ where: { buyerId: contactId, tenantId: ctx.tenantId } }),
+        prisma.tenantMembership.updateMany({
+          where: { tenantId: ctx.tenantId, buyerId: contactId },
+          data: { buyerId: null },
+        }),
+        prisma.buyer.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } }),
+      ]);
     } else {
       await prisma.invite.deleteMany({ where: { buyerId: contactId, tenantId: ctx.tenantId, usedAt: null } });
       await prisma.buyer.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } });
-      deleted = true;
     }
   } else if (kind === "publisher") {
-    const invoices = await prisma.publisherInvoice.count({
+    const invoices = await prisma.publisherInvoice.findMany({
       where: { publisherId: contactId, tenantId: ctx.tenantId },
+      select: { periodStart: true, periodEnd: true, dueDate: true, invoiceDate: true },
     });
-    if (invoices > 0) {
-      await prisma.publisher.updateMany({
-        where: { id: contactId, tenantId: ctx.tenantId },
-        data: { isActive: false },
-      });
+    const figures = await prisma.publisherDailyFigure.findMany({
+      where: { publisherId: contactId, tenantId: ctx.tenantId },
+      select: { figureDate: true },
+    });
+    if (invoices.length > 0 || figures.length > 0) {
+      if (!admin) {
+        return {
+          error: "This publisher has payables or daily figures. A company admin can delete them, or you can deactivate the publisher.",
+        };
+      }
+      const closed = lockedFinanceErrorForDates([
+        ...invoices.flatMap((row) => [row.periodStart, row.periodEnd, row.dueDate, row.invoiceDate]),
+        ...figures.map((row) => row.figureDate),
+      ]);
+      if (closed) {
+        return {
+          error: `${closed} Deactivate this publisher instead of deleting, so closed months stay intact.`,
+        };
+      }
+      await prisma.$transaction([
+        prisma.publisherInvoice.deleteMany({ where: { publisherId: contactId, tenantId: ctx.tenantId } }),
+        prisma.invite.deleteMany({ where: { publisherId: contactId, tenantId: ctx.tenantId } }),
+        prisma.tenantMembership.updateMany({
+          where: { tenantId: ctx.tenantId, publisherId: contactId },
+          data: { publisherId: null },
+        }),
+        prisma.publisher.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } }),
+      ]);
     } else {
       await prisma.invite.deleteMany({
         where: { publisherId: contactId, tenantId: ctx.tenantId, usedAt: null },
       });
       await prisma.publisher.deleteMany({ where: { id: contactId, tenantId: ctx.tenantId } });
-      deleted = true;
     }
+  } else {
+    return { error: "Choose a buyer or publisher to remove." };
   }
+
   revalidatePath("/directory");
   revalidatePath("/buyers");
   revalidatePath("/publishers");
-  if (deleted) {
-    redirect(kind === "publisher" ? "/directory?tab=publishers" : "/directory?tab=buyers");
-  }
+  revalidatePath("/dashboard");
+  revalidatePath("/figures");
+  redirect(kind === "publisher" ? "/directory?tab=publishers" : "/directory?tab=buyers");
 }
 
 export async function upsertPartner(formData: FormData) {
@@ -1032,12 +1095,43 @@ export async function saveCompanyProfile(_prev: FormActionState, formData: FormD
   return {};
 }
 
+export async function saveCompanyIdentityAction(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const ctx = await requireTenantAdmin();
+  const name = parseCompanyName(formField(formData, "name"));
+  if (!name.ok) return invalid("name", name.error);
+  const country = parseCountry(formField(formData, "country"));
+  if (!country.ok) return invalid("country", country.error);
+  const phone = parsePhone(formField(formData, "phone"), country.value);
+  if (!phone.ok) return invalid("phone", phone.error);
+  const address = parseAddress(formField(formData, "address"));
+  if (!address.ok) return invalid("address", address.error);
+  const zipCode = parseZipCode(formField(formData, "zipCode"), country.value);
+  if (!zipCode.ok) return invalid("zipCode", zipCode.error);
+  const email = parseEmail(formField(formData, "email"), false);
+  if (!email.ok) return invalid("email", email.error);
+
+  const result = await updateCompanyIdentity(ctx.tenantId, {
+    name: name.value,
+    email: email.value,
+    phone: phone.value,
+    address: address.value,
+    country: country.value,
+    zipCode: zipCode.value,
+  });
+  if ("error" in result) return invalid("name", result.error || "Could not update company details.");
+  revalidatePath("/settings");
+  revalidatePath("/buyers/generate");
+  revalidatePath("/invoices");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function saveCompanyBankAction(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const ctx = await requireTenantAdmin();
   const branding = await getCompanyBranding(ctx.tenantId, ctx.tenantName);
-  if (branding.hasBank) return { error: "Company bank details are locked and cannot be changed." };
-  if (!branding.country) return { error: "Company country is missing. Bank details follow the locked country." };
-  const bank = parseBankFromForm(formData, branding.country);
+  const country = branding.country || str(formData, "country");
+  if (!country) return { error: "Save the company country first, then add bank details." };
+  const bank = parseBankFromForm(formData, country);
   if (!bank.ok) return invalidResult("bankName", bank);
 
   await prisma.$executeRaw`
@@ -1063,7 +1157,66 @@ export async function saveCompanyBankAction(_prev: FormActionState, formData: Fo
   `;
   revalidatePath("/settings");
   revalidatePath("/", "layout");
-  return {};
+  return { ok: true };
+}
+
+export async function clearCompanyBankAction(_formData?: FormData): Promise<void> {
+  const ctx = await requireTenantAdmin();
+  await prisma.$executeRaw`
+    UPDATE "CompanyProfile"
+    SET
+      "bankName" = NULL,
+      "bankDetails" = NULL,
+      "bankAccountNumber" = NULL,
+      "bankRoutingNumber" = NULL,
+      "bankIban" = NULL,
+      "bankSwift" = NULL
+    WHERE "tenantId" = ${ctx.tenantId}
+  `;
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+}
+
+export async function saveCompanyCardAction(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const ctx = await requireTenantAdmin();
+  const card = parseCardFromForm(formData);
+  if (!card.ok) return invalidResult("cardHolderName", card);
+
+  await prisma.$executeRaw`
+    INSERT INTO "CompanyProfile" (
+      "tenantId", "cardHolderName", "cardBrand", "cardNumber", "cardExpiry"
+    )
+    VALUES (
+      ${ctx.tenantId},
+      ${card.value.cardHolderName},
+      ${card.value.cardBrand},
+      ${card.value.cardNumber},
+      ${card.value.cardExpiry}
+    )
+    ON CONFLICT ("tenantId") DO UPDATE SET
+      "cardHolderName" = EXCLUDED."cardHolderName",
+      "cardBrand" = EXCLUDED."cardBrand",
+      "cardNumber" = EXCLUDED."cardNumber",
+      "cardExpiry" = EXCLUDED."cardExpiry"
+  `;
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function clearCompanyCardAction(_formData?: FormData): Promise<void> {
+  const ctx = await requireTenantAdmin();
+  await prisma.$executeRaw`
+    UPDATE "CompanyProfile"
+    SET
+      "cardHolderName" = NULL,
+      "cardBrand" = NULL,
+      "cardNumber" = NULL,
+      "cardExpiry" = NULL
+    WHERE "tenantId" = ${ctx.tenantId}
+  `;
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
 }
 
 export async function createTenantAction(_prev: FormActionState, formData: FormData): Promise<FormActionState> {

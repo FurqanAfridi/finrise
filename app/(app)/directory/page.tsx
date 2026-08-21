@@ -12,7 +12,8 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
-import { ContactCardLink, ContactTableRow } from "@/components/directory/contact-link";
+import { ContactDeleteIcon } from "@/components/directory/contact-delete-icon";
+import { ContactCardLink, ContactNameLink, ContactTableRow } from "@/components/directory/contact-link";
 import { CustomVerticalForm } from "@/components/directory/custom-vertical-form";
 import { DirectoryTabs, type DirectoryTabId } from "@/components/directory/directory-tabs";
 import { NativeSelect, TextInput } from "@/components/forms";
@@ -48,6 +49,7 @@ export default async function DirectoryPage({
   searchParams: Promise<{ tab?: string | string[]; q?: string | string[]; status?: string | string[] }>;
 }) {
   const ctx = await requireBrokerOps();
+  const canDeleteWithHistory = ctx.tenantRole === "ADMIN" || ctx.platformRole === "ADMIN";
   await ensurePpcVerticals(ctx.tenantId);
   const params = await searchParams;
   const tab = parseDirectoryTab(params.tab);
@@ -65,7 +67,7 @@ export default async function DirectoryPage({
       },
       include: {
         verticalOffers: { include: { vertical: { select: { name: true } } }, orderBy: { vertical: { name: "asc" } } },
-        _count: { select: { invoices: true } },
+        _count: { select: { invoices: true, dailyFigures: true } },
       },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
     }),
@@ -77,7 +79,7 @@ export default async function DirectoryPage({
       },
       include: {
         verticalOffers: { include: { vertical: { select: { name: true } } }, orderBy: { vertical: { name: "asc" } } },
-        _count: { select: { invoices: true } },
+        _count: { select: { invoices: true, dailyFigures: true } },
       },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
     }),
@@ -155,53 +157,71 @@ export default async function DirectoryPage({
                     <TableCell>Verticals</TableCell>
                     <TableCell align="right">Invoices</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell align="right" aria-label="Actions" sx={{ width: 72 }} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {buyers.map((row) => (
-                    <ContactTableRow key={row.id} href={`/directory/buyers/${row.id}`}>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {row.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {row.email || "No email"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{row.contactName || "None"}</TableCell>
-                      <TableCell>
-                        {row.verticalOffers.length
-                          ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
-                          : "None"}
-                      </TableCell>
-                      <TableCell align="right" className="fr-money">
-                        {row._count.invoices}
-                      </TableCell>
-                      <TableCell>
-                        <StatusPill kind={row.isActive ? "active" : "inactive"} />
-                      </TableCell>
-                    </ContactTableRow>
-                  ))}
+                  {buyers.map((row) => {
+                    const hasHistory = row._count.invoices > 0 || row._count.dailyFigures > 0;
+                    return (
+                      <ContactTableRow key={row.id}>
+                        <TableCell>
+                          <ContactNameLink href={`/directory/buyers/${row.id}`} name={row.name} email={row.email} />
+                        </TableCell>
+                        <TableCell>{row.contactName || "None"}</TableCell>
+                        <TableCell>
+                          {row.verticalOffers.length
+                            ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
+                            : "None"}
+                        </TableCell>
+                        <TableCell align="right" className="fr-money">
+                          {row._count.invoices}
+                        </TableCell>
+                        <TableCell>
+                          <StatusPill kind={row.isActive ? "active" : "inactive"} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <ContactDeleteIcon
+                            kind="buyer"
+                            contactId={row.id}
+                            hasHistory={hasHistory}
+                            canDeleteWithHistory={canDeleteWithHistory}
+                          />
+                        </TableCell>
+                      </ContactTableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
             <Stack spacing={1.5} sx={{ display: { xs: "grid", md: "none" }, p: 2 }}>
-              {buyers.map((row) => (
-                <ContactCardLink key={row.id} href={`/directory/buyers/${row.id}`}>
-                  <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1, alignItems: "center" }}>
-                    <Typography sx={{ fontWeight: 600 }}>{row.name}</Typography>
-                    <StatusPill kind={row.isActive ? "active" : "inactive"} />
+              {buyers.map((row) => {
+                const hasHistory = row._count.invoices > 0 || row._count.dailyFigures > 0;
+                return (
+                  <Stack key={row.id} direction="row" spacing={1} sx={{ alignItems: "stretch" }}>
+                    <ContactCardLink href={`/directory/buyers/${row.id}`}>
+                      <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1, alignItems: "center" }}>
+                        <Typography sx={{ fontWeight: 600 }}>{row.name}</Typography>
+                        <StatusPill kind={row.isActive ? "active" : "inactive"} />
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {row.email || "No email"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.verticalOffers.length
+                          ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
+                          : "No verticals"}
+                      </Typography>
+                    </ContactCardLink>
+                    <ContactDeleteIcon
+                      kind="buyer"
+                      contactId={row.id}
+                      hasHistory={hasHistory}
+                      canDeleteWithHistory={canDeleteWithHistory}
+                    />
                   </Stack>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {row.email || "No email"}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {row.verticalOffers.length
-                      ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
-                      : "No verticals"}
-                  </Typography>
-                </ContactCardLink>
-              ))}
+                );
+              })}
             </Stack>
           </MainCard>
         )
@@ -230,53 +250,71 @@ export default async function DirectoryPage({
                     <TableCell>Verticals</TableCell>
                     <TableCell align="right">Payables</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell align="right" aria-label="Actions" sx={{ width: 72 }} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {publishers.map((row) => (
-                    <ContactTableRow key={row.id} href={`/directory/publishers/${row.id}`}>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {row.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {row.email || "No email"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{row.contactName || "None"}</TableCell>
-                      <TableCell>
-                        {row.verticalOffers.length
-                          ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
-                          : "None"}
-                      </TableCell>
-                      <TableCell align="right" className="fr-money">
-                        {row._count.invoices}
-                      </TableCell>
-                      <TableCell>
-                        <StatusPill kind={row.isActive ? "active" : "inactive"} />
-                      </TableCell>
-                    </ContactTableRow>
-                  ))}
+                  {publishers.map((row) => {
+                    const hasHistory = row._count.invoices > 0 || row._count.dailyFigures > 0;
+                    return (
+                      <ContactTableRow key={row.id}>
+                        <TableCell>
+                          <ContactNameLink href={`/directory/publishers/${row.id}`} name={row.name} email={row.email} />
+                        </TableCell>
+                        <TableCell>{row.contactName || "None"}</TableCell>
+                        <TableCell>
+                          {row.verticalOffers.length
+                            ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
+                            : "None"}
+                        </TableCell>
+                        <TableCell align="right" className="fr-money">
+                          {row._count.invoices}
+                        </TableCell>
+                        <TableCell>
+                          <StatusPill kind={row.isActive ? "active" : "inactive"} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <ContactDeleteIcon
+                            kind="publisher"
+                            contactId={row.id}
+                            hasHistory={hasHistory}
+                            canDeleteWithHistory={canDeleteWithHistory}
+                          />
+                        </TableCell>
+                      </ContactTableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
             <Stack spacing={1.5} sx={{ display: { xs: "grid", md: "none" }, p: 2 }}>
-              {publishers.map((row) => (
-                <ContactCardLink key={row.id} href={`/directory/publishers/${row.id}`}>
-                  <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1, alignItems: "center" }}>
-                    <Typography sx={{ fontWeight: 600 }}>{row.name}</Typography>
-                    <StatusPill kind={row.isActive ? "active" : "inactive"} />
+              {publishers.map((row) => {
+                const hasHistory = row._count.invoices > 0 || row._count.dailyFigures > 0;
+                return (
+                  <Stack key={row.id} direction="row" spacing={1} sx={{ alignItems: "stretch" }}>
+                    <ContactCardLink href={`/directory/publishers/${row.id}`}>
+                      <Stack direction="row" sx={{ justifyContent: "space-between", gap: 1, alignItems: "center" }}>
+                        <Typography sx={{ fontWeight: 600 }}>{row.name}</Typography>
+                        <StatusPill kind={row.isActive ? "active" : "inactive"} />
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {row.email || "No email"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.verticalOffers.length
+                          ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
+                          : "No verticals"}
+                      </Typography>
+                    </ContactCardLink>
+                    <ContactDeleteIcon
+                      kind="publisher"
+                      contactId={row.id}
+                      hasHistory={hasHistory}
+                      canDeleteWithHistory={canDeleteWithHistory}
+                    />
                   </Stack>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {row.email || "No email"}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {row.verticalOffers.length
-                      ? row.verticalOffers.map((offer) => offer.vertical.name).join(", ")
-                      : "No verticals"}
-                  </Typography>
-                </ContactCardLink>
-              ))}
+                );
+              })}
             </Stack>
           </MainCard>
         )

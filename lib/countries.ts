@@ -44,3 +44,14 @@ export function countryName(code: string | null | undefined) {
 export function countryDial(code: string | null | undefined) {
   return COUNTRIES.find((row) => row.code === code)?.dial ?? "";
 }
+
+/** National digits for an input that already shows the country dial code. */
+export function nationalPhoneDigits(stored: string | null | undefined, country: string) {
+  const digits = (stored ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  const dial = countryDial(country).replace(/\D/g, "");
+  if (dial && digits.startsWith(dial) && digits.length > dial.length) {
+    return digits.slice(dial.length);
+  }
+  return digits;
+}
