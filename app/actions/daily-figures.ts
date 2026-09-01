@@ -65,6 +65,7 @@ export async function upsertDailyFigureAction(
     figureDate: figureDate.value,
     quantity: quantity.value,
     notes: notes.value,
+    actor: ctx,
   });
   if (!saved.ok) return { error: saved.error };
   await generateDueDraftInvoices(ctx.tenantId, { kind, id: contactId });
@@ -78,7 +79,7 @@ export async function copyYesterdayFiguresAction(formData: FormData) {
   const contactId = str(formData, "contactId");
   if (kind !== "buyer" && kind !== "publisher") return;
   if (!contactId) return;
-  await copyYesterdayFigures(ctx.tenantId, kind, contactId);
+  await copyYesterdayFigures(ctx.tenantId, kind, contactId, ctx);
   await generateDueDraftInvoices(ctx.tenantId, { kind, id: contactId });
   revalidateContact(kind, contactId);
 }
@@ -90,7 +91,7 @@ export async function removeDailyFigureAction(formData: FormData) {
   const figureId = str(formData, "figureId");
   if (kind !== "buyer" && kind !== "publisher") return;
   if (!contactId || !figureId) return;
-  await removeDailyFigure(ctx.tenantId, kind, figureId);
+  await removeDailyFigure(ctx.tenantId, kind, figureId, ctx);
   revalidateContact(kind, contactId);
 }
 

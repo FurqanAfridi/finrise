@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
-const PRISMA_GENERATION = "20260814-contact-portal-links-v4";
+const PRISMA_GENERATION = "20260901-finance-month-closure";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;

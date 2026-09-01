@@ -11,6 +11,7 @@ import { saveCompanyBankAction, saveCompanyCardAction, saveCompanyIdentityAction
 import { BankFields, type BankFieldValues } from "@/components/bank-fields";
 import { DayOfMonthSelect, NativeSelect, NetDaysSelect, TextInput } from "@/components/forms";
 import { SettingsRow, SettingsSection } from "@/components/settings/settings-ui";
+import { MonthAutoCloseField } from "@/components/settings/month-closure-panel";
 import { COUNTRIES, countryDial, nationalPhoneDigits } from "@/lib/countries";
 import { formatCardNumber } from "@/lib/company-branding";
 import { DEFAULT_INVOICE_COLOR } from "@/lib/invoice-theme";
@@ -465,6 +466,7 @@ export function FinanceSettingsForm({
   taxOrder,
   varianceToleranceAmount,
   fiscalMonthStartDay,
+  monthAutoCloseDay,
   lastImportAt,
 }: {
   currency: string;
@@ -472,6 +474,7 @@ export function FinanceSettingsForm({
   taxOrder: string;
   varianceToleranceAmount: number;
   fiscalMonthStartDay: number;
+  monthAutoCloseDay: number | null;
   lastImportAt?: string | null;
 }) {
   const [state, action] = useActionState(saveSettings, {});
@@ -540,6 +543,7 @@ export function FinanceSettingsForm({
             />
           </Box>
         </SettingsRow>
+        <MonthAutoCloseField monthAutoCloseDay={monthAutoCloseDay} errorMessage={errors.monthAutoCloseDay} />
         <SettingsRow label="Last CSV import" hint="When buyer, publisher, or expense rows were last imported.">
           <Typography sx={{ fontSize: 14, fontWeight: 500 }}>
             {lastImportAt ? new Date(lastImportAt).toLocaleString() : "Not imported yet"}

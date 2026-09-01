@@ -17,7 +17,8 @@ import { platformAdminPublicUrl } from "@/lib/platform-host";
 import { platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/roles";
-import { lockedFinanceError, lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
+import { financeLockError, financeLockErrorForMonth } from "@/lib/finance/month-lock-context";
+import type { FinanceActor } from "@/lib/finance/month-lock";
 import {
   formField,
   parseEmail,
@@ -25,6 +26,10 @@ import {
   parsePersonName,
   parsePassword,
 } from "@/lib/validation";
+
+function platformActor(): FinanceActor {
+  return { tenantRole: TenantRole.ADMIN, platformRole: "ADMIN" };
+}
 
 function slugify(input: string) {
   return input
@@ -212,7 +217,11 @@ export async function platformUpdateBuyerInvoice(formData: FormData) {
 
   const invoice = await prisma.buyerInvoice.findUnique({ where: { id } });
   if (!invoice) return { error: "Invoice not found." };
-  const closed = lockedFinanceErrorForDates([invoice.periodStart, invoice.periodEnd, invoice.dueDate]);
+  const closed = await financeLockError(
+    invoice.tenantId,
+    platformActor(),
+    [invoice.periodStart, invoice.periodEnd, invoice.dueDate],
+  );
   if (closed) return { error: closed };
 
   await prisma.buyerInvoice.update({
@@ -239,7 +248,11 @@ export async function platformDeleteBuyerInvoice(formData: FormData) {
   if (!id) return { error: "Invoice not found." };
   const invoice = await prisma.buyerInvoice.findUnique({ where: { id } });
   if (!invoice) return { error: "Invoice not found." };
-  const closed = lockedFinanceErrorForDates([invoice.periodStart, invoice.periodEnd, invoice.dueDate]);
+  const closed = await financeLockError(
+    invoice.tenantId,
+    platformActor(),
+    [invoice.periodStart, invoice.periodEnd, invoice.dueDate],
+  );
   if (closed) return { error: closed };
   await prisma.buyerInvoice.delete({ where: { id } });
   revalidateAdmin("/admin/buyer-invoices");
@@ -259,7 +272,11 @@ export async function platformUpdatePublisherInvoice(formData: FormData) {
 
   const invoice = await prisma.publisherInvoice.findUnique({ where: { id } });
   if (!invoice) return { error: "Invoice not found." };
-  const closed = lockedFinanceErrorForDates([invoice.periodStart, invoice.periodEnd, invoice.dueDate]);
+  const closed = await financeLockError(
+    invoice.tenantId,
+    platformActor(),
+    [invoice.periodStart, invoice.periodEnd, invoice.dueDate],
+  );
   if (closed) return { error: closed };
 
   await prisma.publisherInvoice.update({
@@ -284,7 +301,11 @@ export async function platformDeletePublisherInvoice(formData: FormData) {
   if (!id) return { error: "Invoice not found." };
   const invoice = await prisma.publisherInvoice.findUnique({ where: { id } });
   if (!invoice) return { error: "Invoice not found." };
-  const closed = lockedFinanceErrorForDates([invoice.periodStart, invoice.periodEnd, invoice.dueDate]);
+  const closed = await financeLockError(
+    invoice.tenantId,
+    platformActor(),
+    [invoice.periodStart, invoice.periodEnd, invoice.dueDate],
+  );
   if (closed) return { error: closed };
   await prisma.publisherInvoice.delete({ where: { id } });
   revalidateAdmin("/admin/publisher-invoices");
@@ -359,7 +380,9 @@ export async function platformUpdateExpense(formData: FormData) {
   if (!existing) return { error: "Expense not found." };
   const year = Number(formField(formData, "year") || existing.year);
   const month = Number(formField(formData, "month") || existing.month);
-  const closed = lockedFinanceError(year, month) ?? lockedFinanceError(existing.year, existing.month);
+  const closed =
+    (await financeLockErrorForMonth(existing.tenantId, year, month, platformActor())) ??
+    (await financeLockErrorForMonth(existing.tenantId, existing.year, existing.month, platformActor()));
   if (closed) return { error: closed };
   await prisma.expense.update({
     where: { id },
@@ -384,7 +407,7 @@ export async function platformDeleteExpense(formData: FormData) {
   if (!id) return { error: "Expense not found." };
   const existing = await prisma.expense.findUnique({ where: { id } });
   if (!existing) return { error: "Expense not found." };
-  const closed = lockedFinanceError(existing.year, existing.month);
+  const closed = await financeLockErrorForMonth(existing.tenantId, existing.year, existing.month, platformActor());
   if (closed) return { error: closed };
   await prisma.expense.delete({ where: { id } });
   revalidateAdmin("/admin/expenses");

@@ -24,7 +24,13 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { KpiCard } from "@/components/shared/kpi-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { ensureDefaultExpenseCategories } from "@/lib/finance/expense-categories";
-import { isFinanceMonthLocked, lockedFinanceError } from "@/lib/finance/month-lock";
+import {
+  canEditFinanceMonth,
+  financeMonthLockMessage,
+  financeMonthStatusLabel,
+  isFinanceMonthClosedForTenant,
+} from "@/lib/finance/month-lock";
+import { getMonthLockContext } from "@/lib/finance/month-lock-context";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { requireBrokerOps } from "@/lib/tenant";
@@ -58,7 +64,7 @@ export default async function ExpensesPage({
     ...(categoryFilter ? { category: categoryFilter } : {}),
   };
 
-  const [expenses, recurring, categories, editRow, totals] = await Promise.all([
+  const [expenses, recurring, categories, editRow, totals, lockCtx] = await Promise.all([
     prisma.expense.findMany({
       where,
       include: { categoryRel: true },
@@ -82,14 +88,16 @@ export default async function ExpensesPage({
       _sum: { actual: true, paid: true },
       _count: true,
     }),
+    getMonthLockContext(ctx.tenantId),
   ]);
 
   const actualTotal = num(totals._sum.actual);
   const paidTotal = num(totals._sum.paid);
   const formYear = editRow?.year ?? (Number.isFinite(year) ? year : now.getUTCFullYear());
   const formMonth = editRow?.month ?? month ?? now.getUTCMonth() + 1;
-  const formLocked = isFinanceMonthLocked(formYear, formMonth);
-  const formLockMessage = lockedFinanceError(formYear, formMonth);
+  const formClosed = isFinanceMonthClosedForTenant(lockCtx, formYear, formMonth);
+  const formLocked = !canEditFinanceMonth(lockCtx, formYear, formMonth, ctx);
+  const formLockMessage = formLocked ? financeMonthLockMessage(formYear, formMonth) : null;
   const visibleTemplates = showInactive ? recurring : recurring.filter((row) => row.isActive);
   const formDefaults = editRow
     ? {
@@ -119,7 +127,7 @@ export default async function ExpensesPage({
     <Box>
       <PageHeader
         title="Expenses"
-        description="Track this month's costs with categories and recurring templates. Past months are closed and cannot be changed."
+        description="Track costs by month and category. Months stay open until a company admin closes them or auto-close runs."
       />
 
       <Grid container spacing={gridSpacing} sx={{ mb: 3 }}>
@@ -325,7 +333,8 @@ export default async function ExpensesPage({
                 </TableHead>
                 <TableBody>
                   {expenses.map((row) => {
-                    const rowLocked = isFinanceMonthLocked(row.year, row.month);
+                    const rowClosed = isFinanceMonthClosedForTenant(lockCtx, row.year, row.month);
+                    const rowLocked = !canEditFinanceMonth(lockCtx, row.year, row.month, ctx);
                     return (
                     <TableRow key={row.id} hover selected={row.id === editId}>
                       <TableCell>
@@ -340,7 +349,7 @@ export default async function ExpensesPage({
                         {formatMoney(num(row.paid))}
                       </TableCell>
                       <TableCell>
-                        {rowLocked ? <StatusPill kind="closed" /> : null}
+                        {rowClosed ? <StatusPill kind="closed" /> : null}
                       </TableCell>
                       <TableCell align="right">
                         {rowLocked ? (
@@ -376,7 +385,8 @@ export default async function ExpensesPage({
 
             <Stack spacing={1.5} sx={{ display: { xs: "flex", md: "none" }, p: 2 }}>
               {expenses.map((row) => {
-                const rowLocked = isFinanceMonthLocked(row.year, row.month);
+                const rowClosed = isFinanceMonthClosedForTenant(lockCtx, row.year, row.month);
+                const rowLocked = !canEditFinanceMonth(lockCtx, row.year, row.month, ctx);
                 return (
                 <Box
                   key={row.id}

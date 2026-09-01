@@ -10,7 +10,9 @@ import {
 import { nextBuyerInvoiceNumber, nextPublisherInvoiceNumber } from "@/lib/company-branding";
 import { displayDate, isoDate } from "@/lib/dates";
 import { dueDate, formatNetTerms, lineTotal } from "@/lib/finance/invoice";
-import { lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
+import { financeLockError } from "@/lib/finance/month-lock-context";
+import type { FinanceActor } from "@/lib/finance/month-lock";
+import { TenantRole } from "@prisma/client";
 import { formatMoney } from "@/lib/money";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -231,8 +233,9 @@ export async function upsertDailyFigure(input: {
   figureDate: Date;
   quantity: number;
   notes: string | null;
+  actor: FinanceActor;
 }) {
-  const locked = lockedFinanceErrorForDates([input.figureDate]);
+  const locked = await financeLockError(input.tenantId, input.actor, [input.figureDate]);
   if (locked) return { ok: false as const, error: locked };
   const day = utcDay(input.figureDate);
 
@@ -295,7 +298,12 @@ export async function upsertDailyFigure(input: {
   return { ok: true as const, amount };
 }
 
-export async function copyYesterdayFigures(tenantId: string, kind: "buyer" | "publisher", contactId: string) {
+export async function copyYesterdayFigures(
+  tenantId: string,
+  kind: "buyer" | "publisher",
+  contactId: string,
+  actor: FinanceActor,
+) {
   const today = utcDay(new Date());
   const yesterday = utcDay(today);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
@@ -318,6 +326,7 @@ export async function copyYesterdayFigures(tenantId: string, kind: "buyer" | "pu
         figureDate: today,
         quantity: Number(row.quantity),
         notes: row.notes,
+        actor,
       });
       if (result.ok) copied += 1;
     }
@@ -340,18 +349,24 @@ export async function copyYesterdayFigures(tenantId: string, kind: "buyer" | "pu
       figureDate: today,
       quantity: Number(row.quantity),
       notes: row.notes,
+      actor,
     });
     if (result.ok) copied += 1;
   }
   return copied;
 }
 
-export async function removeDailyFigure(tenantId: string, kind: "buyer" | "publisher", figureId: string) {
+export async function removeDailyFigure(
+  tenantId: string,
+  kind: "buyer" | "publisher",
+  figureId: string,
+  actor: FinanceActor,
+) {
   if (kind === "buyer") {
     const row = await prisma.buyerDailyFigure.findFirst({ where: { id: figureId, tenantId } });
     if (!row) return { ok: false as const, error: "Figure not found." };
     if (row.buyerInvoiceId) return { ok: false as const, error: "This day is already on an invoice." };
-    const locked = lockedFinanceErrorForDates([row.figureDate]);
+    const locked = await financeLockError(tenantId, actor, [row.figureDate]);
     if (locked) return { ok: false as const, error: locked };
     await prisma.buyerDailyFigure.delete({ where: { id: row.id } });
     return { ok: true as const };
@@ -359,7 +374,7 @@ export async function removeDailyFigure(tenantId: string, kind: "buyer" | "publi
   const row = await prisma.publisherDailyFigure.findFirst({ where: { id: figureId, tenantId } });
   if (!row) return { ok: false as const, error: "Figure not found." };
   if (row.publisherInvoiceId) return { ok: false as const, error: "This day is already on a payable." };
-  const locked = lockedFinanceErrorForDates([row.figureDate]);
+  const locked = await financeLockError(tenantId, actor, [row.figureDate]);
   if (locked) return { ok: false as const, error: locked };
   await prisma.publisherDailyFigure.delete({ where: { id: row.id } });
   return { ok: true as const };
@@ -367,6 +382,7 @@ export async function removeDailyFigure(tenantId: string, kind: "buyer" | "publi
 
 export async function generateDueDraftInvoices(tenantId: string, contact?: { kind: "buyer" | "publisher"; id: string }) {
   const created: string[] = [];
+  const automationActor: FinanceActor = { tenantRole: TenantRole.ACCOUNTANT };
   const buyers = await prisma.buyer.findMany({
     where: {
       tenantId,
@@ -397,7 +413,7 @@ export async function generateDueDraftInvoices(tenantId: string, contact?: { kin
         const quantity = figures.reduce((sum, row) => sum + Number(row.quantity), 0);
         const amount = figures.reduce((sum, row) => sum + Number(row.amount), 0);
         if (amount <= 0) continue;
-        const locked = lockedFinanceErrorForDates([cycle.end]);
+        const locked = await financeLockError(tenantId, automationActor, [cycle.end]);
         if (locked) continue;
         const invoiceDate = utcDay(new Date());
         const invoice = await prisma.buyerInvoice.create({
@@ -477,7 +493,7 @@ export async function generateDueDraftInvoices(tenantId: string, contact?: { kin
         const quantity = figures.reduce((sum, row) => sum + Number(row.quantity), 0);
         const amount = figures.reduce((sum, row) => sum + Number(row.amount), 0);
         if (amount <= 0) continue;
-        const locked = lockedFinanceErrorForDates([cycle.end]);
+        const locked = await financeLockError(tenantId, automationActor, [cycle.end]);
         if (locked) continue;
         const invoiceDate = utcDay(new Date());
         const invoice = await prisma.publisherInvoice.create({

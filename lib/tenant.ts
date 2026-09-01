@@ -102,6 +102,10 @@ export function canApprovePayments(role: TenantRoleValue, platformRole?: string)
   return platformRole === "ADMIN" || APPROVER_ROLES.includes(role);
 }
 
+export function isTenantAdmin(role: TenantRoleValue, platformRole?: string) {
+  return platformRole === "ADMIN" || role === TenantRole.ADMIN;
+}
+
 export function isBuyerPortal(ctx: TenantContext) {
   return ctx.tenantRole === TenantRole.BUYER;
 }

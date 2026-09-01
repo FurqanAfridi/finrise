@@ -17,7 +17,7 @@ import {
   replaceBuyerInvoiceLines,
   summarizeInvoiceLines,
 } from "@/lib/invoice-lines";
-import { lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
+import { financeLockError } from "@/lib/finance/month-lock-context";
 import {
   formField,
   parseInteger,
@@ -59,8 +59,11 @@ function revalidateLedgers() {
   revalidatePath("/reports");
 }
 
-function invoiceLockError(...dates: Array<Date | null | undefined>) {
-  return lockedFinanceErrorForDates(dates);
+async function invoiceLockError(
+  ctx: { tenantId: string; tenantRole: import("@/lib/roles").TenantRole; platformRole?: string },
+  ...dates: Array<Date | null | undefined>
+) {
+  return financeLockError(ctx.tenantId, ctx, dates);
 }
 
 export async function upsertBuyerInvoice(
@@ -122,7 +125,8 @@ export async function upsertBuyerInvoice(
       ? dueDate(invoiceDate ?? periodEnd ?? periodStart ?? new Date(), paymentTermsDays)
       : null);
 
-  const closed = invoiceLockError(
+  const closed = await invoiceLockError(
+    ctx,
     invoiceDate,
     periodStart,
     periodEnd,
@@ -193,7 +197,7 @@ export async function deleteBuyerInvoice(
   if (!id) return { error: "Invoice not found." };
   const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!invoice) return { error: "Invoice not found." };
-  const closed = invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate);
+  const closed = await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate);
   if (closed) return { error: closed };
   await prisma.buyerInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateLedgers();
@@ -206,7 +210,7 @@ export async function markBuyerPaid(formData: FormData) {
   if (!id) return;
   const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!invoice) return;
-  const closed = invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate);
+  const closed = await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate);
   if (closed) return;
   const received = dec(formData, "received") ?? Number(invoice.received ?? invoice.receivable);
   await prisma.buyerInvoice.update({
@@ -291,7 +295,7 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   const periodStart = periodStartResult.value ?? invoiceDate;
   const periodEnd = periodEndResult.value ?? invoiceDate;
   const due = dueDateResult.value ?? dueDate(invoiceDate, paymentTermsDays);
-  const closed = invoiceLockError(invoiceDate, periodStart, periodEnd, due);
+  const closed = await invoiceLockError(ctx, invoiceDate, periodStart, periodEnd, due);
   if (closed) return { error: closed };
   const invoiceNumber = str(formData, "invoiceNumber") ?? (await nextBuyerInvoiceNumber(ctx.tenantId));
 
@@ -330,7 +334,7 @@ export async function markBuyerInvoiceSent(formData: FormData) {
   if (!id) return;
   const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!invoice) return;
-  if (invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
+  if (await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   await prisma.buyerInvoice.updateMany({
     where: { id, tenantId: ctx.tenantId },
       data: { invoiceStatus: InvoiceStatus.SENT, isDraft: false },
@@ -408,7 +412,8 @@ export async function upsertPublisherInvoice(
     (invoiceDate || periodEnd || periodStart
       ? dueDate(invoiceDate ?? periodEnd ?? periodStart ?? new Date(), paymentTermsDays)
       : null);
-  const closed = invoiceLockError(
+  const closed = await invoiceLockError(
+    ctx,
     invoiceDate,
     periodStart,
     periodEnd,
@@ -485,7 +490,7 @@ export async function deletePublisherInvoice(
   if (!id) return { error: "Invoice not found." };
   const invoice = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!invoice) return { error: "Invoice not found." };
-  const closed = invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate);
+  const closed = await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate);
   if (closed) return { error: closed };
   await prisma.publisherInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateLedgers();
@@ -501,7 +506,7 @@ export async function markPublisherPaid(formData: FormData) {
     include: { publisher: true },
   });
   if (!invoice) return;
-  if (invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
+  if (await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   const paid = dec(formData, "paid") ?? Number(invoice.paid ?? invoice.payable);
   await prisma.publisherInvoice.update({
     where: { id },
@@ -534,7 +539,7 @@ export async function approvePublisherPayment(formData: FormData) {
   if (!id) return;
   const invoice = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!invoice) return;
-  if (invoiceLockError(invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
+  if (await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   await prisma.publisherInvoice.updateMany({
     where: { id, tenantId: ctx.tenantId, paidApprovalStatus: PaidApprovalStatus.PENDING },
     data: {

@@ -58,7 +58,7 @@ export function ExpenseEntryForm({
     return (
       <Box sx={{ gridColumn: { md: "1 / -1" } }}>
         <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
-          {lockMessage ?? "This month is closed. Past months cannot be changed."}
+          {lockMessage ?? "This month is closed. Ask a company admin to reopen it in Settings → Finance."}
         </Typography>
         <Link href={cancelHref}>
           <Button type="button" variant="outlined" sx={{ mt: 2 }}>

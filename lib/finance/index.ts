@@ -9,10 +9,14 @@ export {
   currentFinanceMonth,
   financeMonthFromDate,
   financeMonthLockMessage,
+  financeMonthStatusLabel,
+  isFinanceMonthClosedForTenant,
   isFinanceMonthLocked,
+  canEditFinanceMonth,
   lockedFinanceError,
   lockedFinanceErrorForDates,
 } from "./month-lock";
+export { getMonthLockContext, financeLockError, financeLockErrorForMonth } from "./month-lock-context";
 export type {
   DistributionResult,
   FinanceSettingsInput,

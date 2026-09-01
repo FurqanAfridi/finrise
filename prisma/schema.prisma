@@ -77,6 +77,11 @@ enum EmailSendStatus {
   FAILED
 }
 
+enum FinanceMonthOverride {
+  CLOSED
+  OPEN
+}
+
 model Tenant {
   id        String   @id @default(cuid())
   name      String
@@ -111,6 +116,7 @@ model Tenant {
   notifications        Notification[]
   bankAccounts         BankAccount[]
   monthReconciliations MonthReconciliation[]
+  financeMonthCloses   FinanceMonthClose[]
   companyProfile       CompanyProfile?
   smtpMailboxes        SmtpMailbox[]
   emailLogs            InvoiceEmailLog[]
@@ -563,6 +569,21 @@ model FinanceSettings {
   varianceToleranceAmount Decimal  @default(1.00) @db.Decimal(14, 2)
   taxOrder                TaxOrder @default(TAX_FIRST)
   fiscalMonthStartDay     Int      @default(1)
+  /// Day of the following month when the prior month auto-closes. Null = manual close only.
+  monthAutoCloseDay       Int?
+}
+
+model FinanceMonthClose {
+  tenantId    String
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  year        Int
+  month       Int
+  override    FinanceMonthOverride
+  updatedAt   DateTime             @updatedAt
+  updatedById String?
+
+  @@id([tenantId, year, month])
+  @@index([tenantId])
 }
 
 model CompanyProfile {

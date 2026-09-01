@@ -181,6 +181,7 @@ export async function importGoogleSheetAction(
       rows,
       commit,
       sourceLabel: "Google Sheets import",
+      actor: ctx,
     });
     return finish(ctx.tenantId, result, commit);
   } catch (error) {
@@ -228,6 +229,7 @@ export async function importUploadedWorkbookAction(
       rows,
       commit,
       sourceLabel: "Spreadsheet import",
+      actor: ctx,
     });
     return finish(ctx.tenantId, result, commit);
   } catch (error) {

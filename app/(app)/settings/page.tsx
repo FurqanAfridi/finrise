@@ -8,6 +8,7 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { TenantRole } from "@prisma/client";
 import { CompanyBankCompleteForm, CompanyCardForm, CompanyExtrasForm, CompanyIdentityForm, FinanceSettingsForm } from "@/components/company-extras-form";
+import { MonthClosurePanel } from "@/components/settings/month-closure-panel";
 import { InviteForm } from "@/components/invite-form";
 import { PageHeader } from "@/components/page-header";
 import { CompaniesPanel } from "@/components/settings/companies-panel";
@@ -23,6 +24,13 @@ import { SmtpSettingsForm } from "@/components/smtp-form";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { getGoogleSheetsConnection } from "@/lib/google-sheets";
 import { getFinanceSettings } from "@/lib/finance/queries";
+import {
+  canEditFinanceMonth,
+  currentFinanceMonth,
+  financeMonthStatusLabel,
+  isFinanceMonthClosedForTenant,
+} from "@/lib/finance/month-lock";
+import { getMonthLockContext } from "@/lib/finance/month-lock-context";
 import { prisma } from "@/lib/prisma";
 import { getSetting } from "@/lib/queries";
 import { listInvoiceEmailLogs, listSmtpMailboxes } from "@/lib/smtp";
@@ -83,7 +91,7 @@ export default async function SettingsPage({
     );
   }
 
-  const [currency, lastImportAt, users, invites, finance, branding, mailboxes, emailLogs, googleSheets] = await Promise.all([
+  const [currency, lastImportAt, users, invites, finance, branding, mailboxes, emailLogs, googleSheets, lockCtx] = await Promise.all([
     getSetting(ctx.tenantId, "currency", "USD"),
     getSetting(ctx.tenantId, "lastImportAt"),
     prisma.tenantMembership.findMany({
@@ -97,7 +105,26 @@ export default async function SettingsPage({
     listSmtpMailboxes(ctx.tenantId),
     listInvoiceEmailLogs(ctx.tenantId),
     getGoogleSheetsConnection(ctx.tenantId),
+    getMonthLockContext(ctx.tenantId),
   ]);
+
+  const closureMonths = Array.from({ length: 12 }, (_, index) => {
+    const anchor = currentFinanceMonth();
+    let year = anchor.year;
+    let month = anchor.month - index;
+    while (month < 1) {
+      month += 12;
+      year -= 1;
+    }
+    const closed = isFinanceMonthClosedForTenant(lockCtx, year, month);
+    return {
+      year,
+      month,
+      status: financeMonthStatusLabel(lockCtx, year, month),
+      closed,
+      canEdit: canEditFinanceMonth(lockCtx, year, month, ctx),
+    };
+  });
 
   return (
     <Box sx={{ width: "100%", maxWidth: "100%" }}>
@@ -228,14 +255,18 @@ export default async function SettingsPage({
       ) : null}
 
       {tab === "finance" ? (
-        <FinanceSettingsForm
-          currency={currency}
-          taxRatePercent={finance.taxRatePercent.toNumber()}
-          taxOrder={finance.taxOrder}
-          varianceToleranceAmount={finance.varianceToleranceAmount.toNumber()}
-          fiscalMonthStartDay={finance.fiscalMonthStartDay}
-          lastImportAt={lastImportAt}
-        />
+        <>
+          <FinanceSettingsForm
+            currency={currency}
+            taxRatePercent={finance.taxRatePercent.toNumber()}
+            taxOrder={finance.taxOrder}
+            varianceToleranceAmount={finance.varianceToleranceAmount.toNumber()}
+            fiscalMonthStartDay={finance.fiscalMonthStartDay}
+            monthAutoCloseDay={finance.monthAutoCloseDay}
+            lastImportAt={lastImportAt}
+          />
+          <MonthClosurePanel months={closureMonths} />
+        </>
       ) : null}
 
       {tab === "team" ? (

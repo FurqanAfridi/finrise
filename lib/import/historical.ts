@@ -1,7 +1,8 @@
 import { PaidApprovalStatus, PaymentStatus } from "@prisma/client";
 import { parsePeriodLabel } from "@/lib/finance/period";
 import { parsePaymentTermsDays } from "@/lib/finance/invoice";
-import { lockedFinanceError, lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
+import { financeLockError, financeLockErrorForMonth } from "@/lib/finance/month-lock-context";
+import type { FinanceActor } from "@/lib/finance/month-lock";
 import { prisma } from "@/lib/prisma";
 import { parseInvoiceStatus, parsePaymentStatus, parseRateType } from "@/lib/status";
 import type { ImportKind } from "@/lib/import/table";
@@ -59,8 +60,9 @@ export async function importHistoricalRows(input: {
   rows: Record<string, string>[];
   commit: boolean;
   sourceLabel: string;
+  actor: FinanceActor;
 }): Promise<ImportRunResult> {
-  const { tenantId, kind, rows, commit, sourceLabel } = input;
+  const { tenantId, kind, rows, commit, sourceLabel, actor } = input;
   if (rows.length === 0) {
     return { error: "No data rows found. Include a header line and at least one row." };
   }
@@ -83,7 +85,7 @@ export async function importHistoricalRows(input: {
           errors.push(`Row ${line}: category, year, and month are required`);
           continue;
         }
-        const closed = lockedFinanceError(year, month);
+        const closed = await financeLockErrorForMonth(tenantId, year, month, actor);
         if (closed) {
           errors.push(`Row ${line}: ${closed}`);
           continue;
@@ -123,7 +125,7 @@ export async function importHistoricalRows(input: {
       inferredYear = yearFromDue(row, inferredYear);
       const period = resolvePeriod(row, inferredYear);
       if (period.start) inferredYear = period.start.getUTCFullYear();
-      const closedPeriod = lockedFinanceErrorForDates([period.start, period.end, date(row.due_date)]);
+      const closedPeriod = await financeLockError(tenantId, actor, [period.start, period.end, date(row.due_date)]);
       if (closedPeriod) {
         errors.push(`Row ${line}: ${closedPeriod}`);
         continue;

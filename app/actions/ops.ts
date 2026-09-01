@@ -7,10 +7,10 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PartnerTier, Role, TaxOrder, TenantRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireBrokerOps, requireSessionUser, requireTenant, requireTenantAdmin, TENANT_COOKIE } from "@/lib/tenant";
+import { requireBrokerOps, requireSessionUser, requireTenant, requireTenantAdmin, TENANT_COOKIE, type TenantContext } from "@/lib/tenant";
 import { convertedAmount } from "@/lib/finance/partnerLedger";
 import { money } from "@/lib/finance/decimal";
-import { lockedFinanceError, lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
+import { financeLockError, financeLockErrorForMonth } from "@/lib/finance/month-lock-context";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { createCompanyForUser, updateCompanyIdentity } from "@/lib/company";
 import {
@@ -66,6 +66,14 @@ function dec(formData: FormData, key: string) {
 
 function isCompanyAdmin(ctx: { tenantRole: string; platformRole: string }) {
   return ctx.platformRole === "ADMIN" || ctx.tenantRole === "ADMIN";
+}
+
+async function lockMonth(ctx: TenantContext, year: number, month: number) {
+  return financeLockErrorForMonth(ctx.tenantId, year, month, ctx);
+}
+
+async function lockDates(ctx: TenantContext, dates: Array<Date | null | undefined>) {
+  return financeLockError(ctx.tenantId, ctx, dates);
 }
 
 function hasInvalidNumber(...values: Array<number | null | undefined>) {
@@ -125,12 +133,12 @@ export async function upsertExpense(
     return { error: "Category, year, and month are required." };
   }
 
-  const closed = lockedFinanceError(year, month);
+  const closed = await lockMonth(ctx, year, month);
   if (closed) return { error: closed };
   if (id) {
     const existing = await prisma.expense.findFirst({ where: { id, tenantId: ctx.tenantId } });
     if (!existing) return { error: "That expense was not found." };
-    const existingClosed = lockedFinanceError(existing.year, existing.month);
+    const existingClosed = await lockMonth(ctx, existing.year, existing.month);
     if (existingClosed) return { error: existingClosed };
   }
 
@@ -166,7 +174,7 @@ export async function deleteExpense(formData: FormData) {
   if (!id) return;
   const existing = await prisma.expense.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!existing) return;
-  if (lockedFinanceError(existing.year, existing.month)) return;
+  if (await lockMonth(ctx, existing.year, existing.month)) return;
   await prisma.expense.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateFinance();
 }
@@ -205,7 +213,7 @@ export async function generateRecurringForMonth(
   const year = Number(formData.get("year"));
   const month = Number(formData.get("month"));
   if (!year || !month) return { error: "Choose a year and month." };
-  const closed = lockedFinanceError(year, month);
+  const closed = await lockMonth(ctx, year, month);
   if (closed) return { error: closed };
   const templates = await prisma.recurringExpense.findMany({
     where: { tenantId: ctx.tenantId, isActive: true },
@@ -290,7 +298,7 @@ export async function removeContact(
           error: "This buyer has invoices or daily figures. A company admin can delete them, or you can deactivate the buyer.",
         };
       }
-      const closed = lockedFinanceErrorForDates([
+      const closed = await lockDates(ctx, [
         ...invoices.flatMap((row) => [row.periodStart, row.periodEnd, row.dueDate, row.invoiceDate]),
         ...figures.map((row) => row.figureDate),
       ]);
@@ -327,7 +335,7 @@ export async function removeContact(
           error: "This publisher has payables or daily figures. A company admin can delete them, or you can deactivate the publisher.",
         };
       }
-      const closed = lockedFinanceErrorForDates([
+      const closed = await lockDates(ctx, [
         ...invoices.flatMap((row) => [row.periodStart, row.periodEnd, row.dueDate, row.invoiceDate]),
         ...figures.map((row) => row.figureDate),
       ]);
@@ -407,7 +415,7 @@ export async function recordWithdrawal(formData: FormData) {
   const targetCurrency = formField(formData, "targetCurrency").trim().toUpperCase() || null;
   if (targetCurrency && !/^[A-Z]{3}$/.test(targetCurrency)) return;
   const withdrawalDate = str(formData, "date") ? new Date(String(formData.get("date"))) : new Date();
-  const closedWithdrawal = lockedFinanceErrorForDates([withdrawalDate]);
+  const closedWithdrawal = await lockDates(ctx, [withdrawalDate]);
   if (closedWithdrawal) return;
   await prisma.partnerWithdrawal.create({
     data: {
@@ -443,12 +451,12 @@ export async function upsertPayout(formData: FormData) {
   const year = dec(formData, "year");
   const month = dec(formData, "month");
   const payoutDate = str(formData, "date") ? new Date(String(formData.get("date"))) : null;
-  if (year && month && lockedFinanceError(year, month)) return;
-  if (lockedFinanceErrorForDates([payoutDate])) return;
+  if (year && month && (await lockMonth(ctx, year, month))) return;
+  if (await lockDates(ctx, [payoutDate])) return;
   if (id) {
     const existing = await prisma.partnerPayout.findFirst({ where: { id, tenantId: ctx.tenantId } });
-    if (existing?.year && existing.month && lockedFinanceError(existing.year, existing.month)) return;
-    if (lockedFinanceErrorForDates([existing?.date ?? null])) return;
+    if (existing?.year && existing.month && (await lockMonth(ctx, existing.year, existing.month))) return;
+    if (await lockDates(ctx, [existing?.date ?? null])) return;
   }
   const data = {
     tenantId: ctx.tenantId,
@@ -471,8 +479,8 @@ export async function deletePayout(formData: FormData) {
   if (!id) return;
   const existing = await prisma.partnerPayout.findFirst({ where: { id, tenantId: ctx.tenantId } });
   if (!existing) return;
-  if (existing.year && existing.month && lockedFinanceError(existing.year, existing.month)) return;
-  if (lockedFinanceErrorForDates([existing.date])) return;
+  if (existing.year && existing.month && (await lockMonth(ctx, existing.year, existing.month))) return;
+  if (await lockDates(ctx, [existing.date])) return;
   await prisma.partnerPayout.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidatePath("/payouts");
 }
@@ -951,6 +959,12 @@ export async function saveSettings(_prev: FormActionState, formData: FormData): 
   if (!fiscalDay.ok || fiscalDay.value == null) {
     return invalid("fiscalMonthStartDay", fiscalDay.ok ? "Fiscal month start day is required." : fiscalDay.error);
   }
+  const autoCloseRaw = formField(formData, "monthAutoCloseDay").trim();
+  const monthAutoCloseDay =
+    autoCloseRaw === ""
+      ? { ok: true as const, value: null as number | null }
+      : parseInteger(autoCloseRaw, "Month auto-close day", 1, 28, true);
+  if (!monthAutoCloseDay.ok) return invalid("monthAutoCloseDay", monthAutoCloseDay.error);
 
   await prisma.setting.upsert({
     where: { tenantId_key: { tenantId: ctx.tenantId, key: "currency" } },
@@ -964,10 +978,42 @@ export async function saveSettings(_prev: FormActionState, formData: FormData): 
       varianceToleranceAmount: variance.value,
       taxOrder: str(formData, "taxOrder") === "TIER1_FIRST" ? TaxOrder.TIER1_FIRST : TaxOrder.TAX_FIRST,
       fiscalMonthStartDay: fiscalDay.value,
+      monthAutoCloseDay: monthAutoCloseDay.value,
     },
-    create: { tenantId: ctx.tenantId },
+    create: { tenantId: ctx.tenantId, monthAutoCloseDay: monthAutoCloseDay.value },
   });
   revalidateFinance();
+  return {};
+}
+
+export async function setFinanceMonthOverrideAction(
+  _prev: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const ctx = await requireTenantAdmin();
+  const year = parseInteger(formField(formData, "year"), "Year", 2000, 2100, true);
+  if (!year.ok || year.value == null) return invalid("year", year.ok ? "Year is required." : year.error);
+  const month = parseInteger(formField(formData, "month"), "Month", 1, 12, true);
+  if (!month.ok || month.value == null) return invalid("month", month.ok ? "Month is required." : month.error);
+  const action = str(formData, "action");
+  if (action !== "close" && action !== "open") return { error: "Choose close or reopen." };
+
+  await prisma.financeMonthClose.upsert({
+    where: { tenantId_year_month: { tenantId: ctx.tenantId, year: year.value, month: month.value } },
+    update: {
+      override: action === "close" ? "CLOSED" : "OPEN",
+      updatedById: ctx.userId,
+    },
+    create: {
+      tenantId: ctx.tenantId,
+      year: year.value,
+      month: month.value,
+      override: action === "close" ? "CLOSED" : "OPEN",
+      updatedById: ctx.userId,
+    },
+  });
+  revalidateFinance();
+  revalidatePath("/settings");
   return {};
 }
 
@@ -1367,7 +1413,7 @@ export async function upsertTreasuryCharge(formData: FormData) {
   const amount = parseMoney(formField(formData, "amount"), "Amount", true);
   if (!amount.ok || amount.value == null) return;
   const chargeDate = str(formData, "date") ? new Date(String(formData.get("date"))) : null;
-  if (lockedFinanceErrorForDates([chargeDate])) return;
+  if (await lockDates(ctx, [chargeDate])) return;
   await prisma.ccCharge.create({
     data: {
       tenantId: ctx.tenantId,
@@ -1388,7 +1434,7 @@ export async function upsertFxTransfer(formData: FormData) {
   const rate = dec(formData, "rate");
   if (hasInvalidNumber(usd, pkr, rate)) return;
   const fxDate = str(formData, "date") ? new Date(String(formData.get("date"))) : null;
-  if (lockedFinanceErrorForDates([fxDate])) return;
+  if (await lockDates(ctx, [fxDate])) return;
   await prisma.fxTransfer.create({
     data: {
       tenantId: ctx.tenantId,
@@ -1423,7 +1469,7 @@ export async function upsertMonthReconciliation(formData: FormData) {
   const month = Number(formData.get("month"));
   const statementTotal = dec(formData, "statementTotal");
   if (!year || !month || statementTotal == null || hasInvalidNumber(statementTotal, year, month)) return;
-  if (lockedFinanceError(year, month)) return;
+  if (await lockMonth(ctx, year, month)) return;
   await prisma.monthReconciliation.upsert({
     where: { tenantId_year_month: { tenantId: ctx.tenantId, year, month } },
     update: { statementTotal, notes: str(formData, "notes") },

@@ -21,6 +21,7 @@ export async function getFinanceSettings(tenantId: string) {
     varianceToleranceAmount: d(row.varianceToleranceAmount),
     taxOrder: row.taxOrder as FinanceSettingsInput["taxOrder"],
     fiscalMonthStartDay: row.fiscalMonthStartDay,
+    monthAutoCloseDay: row.monthAutoCloseDay,
   };
 }
 

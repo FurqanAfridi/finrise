@@ -78,6 +78,7 @@ export async function importCsvAction(
     rows,
     commit,
     sourceLabel: "CSV import",
+    actor: ctx,
   });
   return finishImport(ctx.tenantId, result, commit);
 }

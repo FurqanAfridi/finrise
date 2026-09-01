@@ -25,9 +25,10 @@ import { formatMoney } from "@/lib/money";
 import { num } from "@/lib/utils";
 import { INVITE_FROM_EMAIL, platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
 import { canWrite, isPublisherPortal, requireTenant, requireTenantAdmin } from "@/lib/tenant";
-import { formField, parseEmail } from "@/lib/validation";
+import { financeLockError } from "@/lib/finance/month-lock-context";
 import { invalid, type FormActionState } from "@/lib/form-state";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
+import { formField, parseEmail } from "@/lib/validation";
 
 export async function saveSmtpMailboxAction(
   _prev: FormActionState,
@@ -152,6 +153,14 @@ export async function sendInvoiceEmailAction(
     include: { buyer: true, vertical: true },
   });
   if (!invoice) return { error: "Invoice not found." };
+
+  const closed = await financeLockError(ctx.tenantId, ctx, [
+    invoice.periodStart,
+    invoice.periodEnd,
+    invoice.dueDate,
+    invoice.invoiceDate,
+  ]);
+  if (closed) return { error: closed };
 
   const billing = await prisma.$queryRaw<{ email: string | null; address: string | null; contactName: string | null }[]>`
     SELECT email, address, "contactName" FROM "Buyer" WHERE id = ${invoice.buyerId} LIMIT 1
