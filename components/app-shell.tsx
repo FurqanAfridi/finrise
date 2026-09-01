@@ -103,10 +103,10 @@ export function AppShell({
                     borderRadius: 2,
                     mb: 0.25,
                     "&.Mui-selected": {
-                      bgcolor: "primary.main",
-                      color: "primary.contrastText",
-                      "&:hover": { bgcolor: "primary.dark" },
-                      "& .MuiListItemIcon-root": { color: "primary.contrastText" },
+                      bgcolor: "primary.light",
+                      color: "primary.main",
+                      "&:hover": { bgcolor: "action.selected" },
+                      "& .MuiListItemIcon-root": { color: "primary.main" },
                     },
                   }}
                 >

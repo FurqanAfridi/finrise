@@ -24,23 +24,23 @@ const light = {
 };
 
 const dark = {
-  background: "#0B1411",
-  surface: "#15241E",
-  surfaceMuted: "#101C17",
-  border: "#2C4339",
-  text: "#F1F7F3",
-  textMuted: "#A3B8AC",
+  background: "#0F1419",
+  surface: "#1C2430",
+  surfaceMuted: "#161D27",
+  border: "#303A48",
+  text: "#EEF2F6",
+  textMuted: "#9AA5B1",
   primary: "#5ECF8E",
-  primaryHover: "#79E0A4",
-  primaryMuted: "#163528",
-  success: "#4ADE80",
-  successMuted: "#123024",
-  warning: "#F0B429",
-  warningMuted: "#3A2E12",
-  danger: "#FF7B72",
-  dangerMuted: "#3D1C1A",
-  info: "#6CBCF0",
-  infoMuted: "#163246",
+  primaryHover: "#72D89C",
+  primaryMuted: "#243041",
+  success: "#3DCA7E",
+  successMuted: "#1A2824",
+  warning: "#E6A23C",
+  warningMuted: "#2A2318",
+  danger: "#F07167",
+  dangerMuted: "#2D1F1E",
+  info: "#63B3ED",
+  infoMuted: "#1A2533",
 };
 
 /** @deprecated Prefer CSS vars / palette; kept for gradual migration. */
@@ -113,13 +113,13 @@ export function createBerryTheme(mode: PaletteMode): Theme {
         light: t.primaryMuted,
         main: t.primary,
         dark: t.primaryHover,
-        contrastText: isDark ? "#06110C" : "#FFFFFF",
+        contrastText: isDark ? "#0F1419" : "#FFFFFF",
       },
       secondary: {
         light: t.primaryMuted,
         main: t.primary,
         dark: t.primaryHover,
-        contrastText: isDark ? "#06110C" : "#FFFFFF",
+        contrastText: isDark ? "#0F1419" : "#FFFFFF",
       },
       error: {
         light: t.dangerMuted,
@@ -158,6 +158,11 @@ export function createBerryTheme(mode: PaletteMode): Theme {
       background: {
         paper: t.surface,
         default: t.background,
+      },
+      action: {
+        hover: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(27, 36, 48, 0.04)",
+        selected: isDark ? "rgba(94, 207, 142, 0.12)" : t.primaryMuted,
+        focus: isDark ? "rgba(94, 207, 142, 0.16)" : t.primaryMuted,
       },
     },
     typography: sharedTypography(),
@@ -208,20 +213,20 @@ export function createBerryTheme(mode: PaletteMode): Theme {
           root: { backgroundImage: "none" },
         },
       },
-      MuiAppBar: {
-        styleOverrides: {
-          root: {
-            backgroundImage: "none",
-            borderBottom: `1px solid ${t.border}`,
-            boxShadow: "none",
-          },
-        },
-      },
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
             borderRadius: 8,
-            backgroundColor: t.surface,
+            backgroundColor: isDark ? t.surfaceMuted : t.surface,
+            "& .MuiOutlinedInput-notchedOutline": {
+              borderColor: t.border,
+            },
+            "&:hover .MuiOutlinedInput-notchedOutline": {
+              borderColor: isDark ? "#3d4a5c" : t.border,
+            },
+            "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+              borderColor: t.primary,
+            },
           },
         },
       },
@@ -261,8 +266,28 @@ export function createBerryTheme(mode: PaletteMode): Theme {
         styleOverrides: {
           root: {
             "&:hover": {
-              backgroundColor: isDark ? "rgba(61, 155, 134, 0.08)" : "rgba(31, 107, 90, 0.04)",
+              backgroundColor: isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(31, 107, 90, 0.04)",
             },
+          },
+        },
+      },
+      MuiDrawer: {
+        styleOverrides: {
+          paper: {
+            backgroundColor: t.surface,
+            borderRight: `1px solid ${t.border}`,
+            backgroundImage: "none",
+          },
+        },
+      },
+      MuiAppBar: {
+        styleOverrides: {
+          root: {
+            backgroundColor: t.surface,
+            color: t.text,
+            backgroundImage: "none",
+            borderBottom: `1px solid ${t.border}`,
+            boxShadow: "none",
           },
         },
       },
@@ -272,12 +297,16 @@ export function createBerryTheme(mode: PaletteMode): Theme {
             borderRadius: 10,
             marginBottom: 2,
             minHeight: 44,
+            color: t.textMuted,
+            "&:hover": {
+              backgroundColor: isDark ? "rgba(255, 255, 255, 0.04)" : t.primaryMuted,
+            },
             "&.Mui-selected": {
               backgroundColor: t.primaryMuted,
               color: t.primary,
               "& .MuiListItemIcon-root": { color: t.primary },
               "&:hover": {
-                backgroundColor: t.primaryMuted,
+                backgroundColor: isDark ? "rgba(94, 207, 142, 0.14)" : t.primaryMuted,
               },
             },
           },
@@ -286,8 +315,37 @@ export function createBerryTheme(mode: PaletteMode): Theme {
       MuiMenu: {
         styleOverrides: {
           paper: {
+            backgroundColor: t.surface,
             backgroundImage: "none",
             border: `1px solid ${t.border}`,
+          },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            backgroundColor: t.surface,
+            backgroundImage: "none",
+            border: `1px solid ${t.border}`,
+          },
+        },
+      },
+      MuiBottomNavigation: {
+        styleOverrides: {
+          root: {
+            backgroundColor: t.surface,
+            borderTop: `1px solid ${t.border}`,
+          },
+        },
+      },
+      MuiBottomNavigationAction: {
+        styleOverrides: {
+          root: {
+            color: t.textMuted,
+            minWidth: 64,
+            "&.Mui-selected": {
+              color: t.primary,
+            },
           },
         },
       },

@@ -7,6 +7,7 @@ import ListItemAvatar from "@mui/material/ListItemAvatar";
 import ListItemText from "@mui/material/ListItemText";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
+import { useTheme } from "@mui/material/styles";
 import { MainCard } from "./main-card";
 import { berryColors } from "@/theme/berry";
 
@@ -23,11 +24,15 @@ export function IncomeCard({
   icon: React.ReactNode;
   dark?: boolean;
 }) {
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === "dark";
+  const useAccent = dark && !isDarkMode;
+
   return (
     <MainCard
       content={false}
       sx={
-        dark
+        useAccent
           ? {
               bgcolor: berryColors.primaryDark,
               color: berryColors.primaryLight,
@@ -44,10 +49,16 @@ export function IncomeCard({
                 right: -180,
               },
             }
-          : undefined
+          : dark && isDarkMode
+            ? {
+                bgcolor: "var(--fr-primary-muted)",
+                borderLeft: "3px solid var(--fr-primary)",
+                overflow: "hidden",
+              }
+            : undefined
       }
     >
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: 2, position: "relative", zIndex: 1 }}>
         <List sx={{ py: 0 }}>
           <ListItem alignItems="center" disableGutters sx={{ py: 0 }}>
             <ListItemAvatar>
@@ -57,8 +68,16 @@ export function IncomeCard({
                   width: 44,
                   height: 44,
                   borderRadius: 2,
-                  bgcolor: dark ? berryColors.primary800 : berryColors.warningLight,
-                  color: dark ? "#fff" : berryColors.orangeDark,
+                  bgcolor: useAccent
+                    ? berryColors.primary800
+                    : dark && isDarkMode
+                      ? "rgba(255,255,255,0.06)"
+                      : berryColors.warningLight,
+                  color: useAccent
+                    ? "#fff"
+                    : dark && isDarkMode
+                      ? "var(--fr-primary)"
+                      : berryColors.orangeDark,
                 }}
               >
                 {icon}
@@ -66,14 +85,26 @@ export function IncomeCard({
             </ListItemAvatar>
             <ListItemText
               primary={
-                <Typography variant="h4" sx={{ color: dark ? "common.white" : "inherit" }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    color: useAccent ? "common.white" : dark && isDarkMode ? "var(--fr-primary)" : "inherit",
+                  }}
+                >
                   {value}
                 </Typography>
               }
               secondary={
                 <Typography
                   variant="subtitle2"
-                  sx={{ color: dark ? berryColors.primaryLight : "text.secondary", mt: 0.25 }}
+                  sx={{
+                    color: useAccent
+                      ? berryColors.primaryLight
+                      : dark && isDarkMode
+                        ? "var(--fr-text-muted)"
+                        : "text.secondary",
+                    mt: 0.25,
+                  }}
                 >
                   {label}
                   {hint ? ` · ${hint}` : ""}

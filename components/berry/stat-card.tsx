@@ -4,33 +4,74 @@ import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import { useTheme } from "@mui/material/styles";
 import { MainCard } from "./main-card";
 import { berryColors } from "@/theme/berry";
 
 type Tone = "secondary" | "primary" | "error" | "warning";
 
-const TONE: Record<Tone, { bg: string; circle: string; muted: string }> = {
-  secondary: {
-    bg: berryColors.secondaryDark,
-    circle: berryColors.secondary800,
-    muted: berryColors.secondary200,
-  },
-  primary: {
-    bg: berryColors.primaryDark,
-    circle: berryColors.primary800,
-    muted: berryColors.primary200,
-  },
-  error: {
-    bg: berryColors.errorDark,
-    circle: berryColors.errorMain,
-    muted: berryColors.errorLight,
-  },
-  warning: {
-    bg: berryColors.orangeDark,
-    circle: berryColors.orangeMain,
-    muted: "#ffe0b2",
-  },
-};
+function useToneColors(tone: Tone) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+
+  if (isDark) {
+    const map: Record<Tone, { bg: string; accent: string; label: string; value: string }> = {
+      primary: {
+        bg: "var(--fr-primary-muted)",
+        accent: "var(--fr-primary)",
+        label: "var(--fr-text-muted)",
+        value: "var(--fr-primary)",
+      },
+      secondary: {
+        bg: "var(--fr-surface)",
+        accent: "var(--fr-info)",
+        label: "var(--fr-text-muted)",
+        value: "var(--fr-text)",
+      },
+      error: {
+        bg: "var(--fr-danger-muted)",
+        accent: "var(--fr-danger)",
+        label: "var(--fr-text-muted)",
+        value: "var(--fr-danger)",
+      },
+      warning: {
+        bg: "var(--fr-warning-muted)",
+        accent: "var(--fr-warning)",
+        label: "var(--fr-text-muted)",
+        value: "var(--fr-warning)",
+      },
+    };
+    return map[tone];
+  }
+
+  const lightMap: Record<Tone, { bg: string; accent: string; label: string; value: string }> = {
+    secondary: {
+      bg: berryColors.secondaryDark,
+      accent: berryColors.secondary800,
+      label: berryColors.secondary200,
+      value: "#FFFFFF",
+    },
+    primary: {
+      bg: berryColors.primaryDark,
+      accent: berryColors.primary800,
+      label: berryColors.primary200,
+      value: "#FFFFFF",
+    },
+    error: {
+      bg: berryColors.errorDark,
+      accent: berryColors.errorMain,
+      label: berryColors.errorLight,
+      value: "#FFFFFF",
+    },
+    warning: {
+      bg: berryColors.orangeDark,
+      accent: berryColors.orangeMain,
+      label: "#ffe0b2",
+      value: "#FFFFFF",
+    },
+  };
+  return lightMap[tone];
+}
 
 export function StatCard({
   label,
@@ -45,55 +86,80 @@ export function StatCard({
   icon?: React.ReactNode;
   tone?: Tone;
 }) {
-  const colors = TONE[tone];
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  const colors = useToneColors(tone);
+
   return (
     <MainCard
       content={false}
       sx={{
         bgcolor: colors.bg,
-        color: "#fff",
+        color: isDark ? "var(--fr-text)" : colors.value,
         overflow: "hidden",
         position: "relative",
-        "&:after": {
-          content: '""',
-          position: "absolute",
-          width: 210,
-          height: 210,
-          background: colors.circle,
-          borderRadius: "50%",
-          top: -85,
-          right: -95,
-        },
-        "&:before": {
-          content: '""',
-          position: "absolute",
-          width: 210,
-          height: 210,
-          background: colors.circle,
-          borderRadius: "50%",
-          top: -125,
-          right: -15,
-          opacity: 0.5,
-        },
+        borderLeft: isDark ? `3px solid ${colors.accent}` : undefined,
+        ...(!isDark
+          ? {
+              "&:after": {
+                content: '""',
+                position: "absolute",
+                width: 210,
+                height: 210,
+                background: colors.accent,
+                borderRadius: "50%",
+                top: -85,
+                right: -95,
+              },
+              "&:before": {
+                content: '""',
+                position: "absolute",
+                width: 210,
+                height: 210,
+                background: colors.accent,
+                borderRadius: "50%",
+                top: -125,
+                right: -15,
+                opacity: 0.5,
+              },
+            }
+          : {}),
       }}
     >
       <Box sx={{ p: 2.25, position: "relative", zIndex: 1 }}>
         {icon ? (
           <Avatar
             variant="rounded"
-            sx={{ bgcolor: colors.circle, color: "#fff", width: 44, height: 44, borderRadius: 2, mb: 1 }}
+            sx={{
+              bgcolor: isDark ? "rgba(255,255,255,0.06)" : colors.accent,
+              color: isDark ? colors.accent : "#fff",
+              width: 44,
+              height: 44,
+              borderRadius: 2,
+              mb: 1,
+            }}
           >
             {icon}
           </Avatar>
         ) : null}
         <Stack direction="row" sx={{ alignItems: "center" }}>
-          <Typography sx={{ fontSize: "1.65rem", fontWeight: 500, mr: 1, mt: 1.25, mb: 0.5 }}>
+          <Typography
+            className="fr-money"
+            sx={{
+              fontSize: "1.65rem",
+              fontWeight: 600,
+              mr: 1,
+              mt: 1.25,
+              mb: 0.5,
+              color: isDark ? colors.value : colors.value,
+            }}
+          >
             {value}
           </Typography>
         </Stack>
-        <Typography sx={{ fontSize: "1rem", fontWeight: 500, color: colors.muted }}>{label}</Typography>
+        <Typography sx={{ fontSize: "1rem", fontWeight: 500, color: colors.label }}>{label}</Typography>
         {hint ? (
-          <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.72)" }}>
+          <Typography variant="caption" sx={{ color: isDark ? "var(--fr-text-muted)" : "rgba(255,255,255,0.72)" }}>
             {hint}
           </Typography>
         ) : null}
