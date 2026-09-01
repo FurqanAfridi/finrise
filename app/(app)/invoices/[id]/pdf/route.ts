@@ -1,3 +1,4 @@
+import { buildBuyerInvoiceDeliveryContext, toBuyerInvoiceDeliveryPayload } from "@/lib/buyer-invoice-delivery";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { buildInvoicePdf, invoicePdfFilename } from "@/lib/invoice-pdf";
 import { getSetting } from "@/lib/queries";
@@ -24,31 +25,31 @@ export async function GET(
   const billing = await prisma.$queryRaw<{ email: string | null; address: string | null; contactName: string | null }[]>`
     SELECT email, address, "contactName" FROM "Buyer" WHERE id = ${invoice.buyerId} LIMIT 1
   `;
-  const [branding, currency] = await Promise.all([
+  const [branding, currency, deliveryContext] = await Promise.all([
     getCompanyBranding(ctx.tenantId, ctx.tenantName),
     getSetting(ctx.tenantId, "currency", "USD"),
+    buildBuyerInvoiceDeliveryContext(ctx.tenantId, invoice, billing[0]),
   ]);
+  const payload = toBuyerInvoiceDeliveryPayload(invoice, deliveryContext);
 
   const pdf = await buildInvoicePdf(
     {
-      invoiceNumber: invoice.invoiceNumber,
-      periodLabel: invoice.periodLabel,
-      periodStart: invoice.periodStart,
-      periodEnd: invoice.periodEnd,
-      dueDate: invoice.dueDate,
-      createdAt: invoice.createdAt,
-      leadCount: invoice.leadCount,
-      rateType: invoice.rateType,
-      rate: invoice.rate,
-      revenue: invoice.revenue,
-      receivable: invoice.receivable,
-      paymentTermsDays: invoice.paymentTermsDays,
-      comments: invoice.comments,
-      buyerName: invoice.buyer.name,
-      buyerEmail: billing[0]?.email ?? invoice.buyer.email,
-      buyerAddress: billing[0]?.address ?? invoice.buyer.address,
-      buyerContact: billing[0]?.contactName ?? invoice.buyer.contactName,
-      verticalName: invoice.vertical?.name ?? null,
+      invoiceNumber: payload.invoiceNumber,
+      periodLabel: payload.periodLabel,
+      periodStart: payload.periodStart,
+      periodEnd: payload.periodEnd,
+      dueDate: payload.dueDate,
+      createdAt: payload.createdAt,
+      revenue: payload.revenue,
+      receivable: payload.receivable,
+      paymentTermsDays: payload.paymentTermsDays,
+      comments: payload.comments,
+      buyerName: payload.buyerName,
+      buyerEmails: payload.buyerEmails,
+      buyerAddress: payload.buyerAddress,
+      buyerContact: payload.buyerContact,
+      verticalName: payload.verticalName,
+      lines: payload.lines,
     },
     branding,
     currency,

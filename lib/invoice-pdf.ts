@@ -2,6 +2,7 @@ import { createRequire } from "module";
 import { join } from "path";
 import type { CompanyBranding } from "@/lib/company-branding";
 import { paymentDetailLines } from "@/lib/company-branding";
+import type { InvoiceLineDisplay } from "@/lib/invoice-lines";
 import { displayDate } from "@/lib/dates";
 import { formatNetTerms } from "@/lib/finance/invoice";
 import { normalizeInvoiceColor } from "@/lib/invoice-theme";
@@ -21,19 +22,25 @@ export type InvoicePdfInput = {
   periodEnd: Date | null;
   dueDate: Date | null;
   createdAt: Date;
-  leadCount: unknown;
-  rateType: keyof typeof RATE_TYPE_LABEL;
-  rate: unknown;
   revenue: unknown;
   receivable: unknown;
   paymentTermsDays: number | null;
   comments: string | null;
   buyerName: string;
-  buyerEmail: string | null;
+  buyerEmails: string[];
   buyerAddress: string | null;
   buyerContact: string | null;
   verticalName: string | null;
+  lines: InvoiceLineDisplay[];
 };
+
+function lineDescription(line: InvoiceLineDisplay, periodLabel: string | null) {
+  return (
+    line.comments ||
+    [line.verticalName, periodLabel].filter(Boolean).join(" · ") ||
+    "Advertising / lead generation"
+  );
+}
 
 export async function buildInvoicePdf(
   invoice: InvoicePdfInput,
@@ -41,16 +48,11 @@ export async function buildInvoicePdf(
   currency: string,
 ): Promise<Buffer> {
   const amount = num(invoice.receivable) || num(invoice.revenue);
-  const qty = invoice.leadCount == null ? null : num(invoice.leadCount);
-  const rate = invoice.rate == null ? null : num(invoice.rate);
-  const description =
-    invoice.comments ||
-    [invoice.verticalName, invoice.periodLabel].filter(Boolean).join(" · ") ||
-    "Advertising / lead generation";
   const issueDate = invoice.periodEnd ?? invoice.periodStart ?? invoice.createdAt;
   const number = invoice.invoiceNumber || "Invoice";
   const accentHex = normalizeInvoiceColor(branding.invoiceColor);
   const bankLines = paymentDetailLines(branding);
+  const emailList = invoice.buyerEmails.join(", ");
 
   const doc = new PDFDocument({ size: "A4", margin: 50 });
   const chunks: Buffer[] = [];
@@ -87,8 +89,9 @@ export async function buildInvoicePdf(
       doc.text(invoice.buyerAddress, 50, y, { width: 240 });
       y += doc.heightOfString(invoice.buyerAddress, { width: 240 }) + 4;
     }
-    if (invoice.buyerEmail) {
-      doc.text(invoice.buyerEmail, 50, y);
+    if (emailList) {
+      doc.text(emailList, 50, y, { width: 240 });
+      y += doc.heightOfString(emailList, { width: 240 }) + 4;
     }
 
     const metaX = 350;
@@ -114,17 +117,25 @@ export async function buildInvoicePdf(
     doc.text("Amount", 460, y + 6, { width: 75, align: "right" });
 
     y += 28;
-    doc.fillColor("#111827").font("Helvetica-Bold").fontSize(10).text(description, 58, y, { width: 250 });
-    const sub = [RATE_TYPE_LABEL[invoice.rateType], invoice.verticalName].filter(Boolean).join(" · ");
-    if (sub) {
-      doc.font("Helvetica").fontSize(8).fillColor("#6b7280").text(sub, 58, y + 14, { width: 250 });
+    for (const line of invoice.lines) {
+      const description = lineDescription(line, invoice.periodLabel);
+      const qty = line.leadCount == null ? null : line.leadCount;
+      const rate = line.rate == null ? null : line.rate;
+      doc.fillColor("#111827").font("Helvetica-Bold").fontSize(10).text(description, 58, y, { width: 250 });
+      const sub = [RATE_TYPE_LABEL[line.rateType], line.verticalName].filter(Boolean).join(" · ");
+      let rowHeight = 18;
+      if (sub) {
+        doc.font("Helvetica").fontSize(8).fillColor("#6b7280").text(sub, 58, y + 14, { width: 250 });
+        rowHeight = 32;
+      }
+      doc.fillColor("#111827").font("Helvetica").fontSize(10);
+      doc.text(qty == null ? "n/a" : qty.toLocaleString(), 320, y, { width: 50, align: "right" });
+      doc.text(rate == null ? "n/a" : formatMoney(rate, currency), 380, y, { width: 70, align: "right" });
+      doc.font("Helvetica-Bold").text(formatMoney(line.amount, currency), 460, y, { width: 75, align: "right" });
+      y += rowHeight + 12;
     }
-    doc.fillColor("#111827").font("Helvetica").fontSize(10);
-    doc.text(qty == null ? "n/a" : qty.toLocaleString(), 320, y, { width: 50, align: "right" });
-    doc.text(rate == null ? "n/a" : formatMoney(rate, currency), 380, y, { width: 70, align: "right" });
-    doc.font("Helvetica-Bold").text(formatMoney(amount, currency), 460, y, { width: 75, align: "right" });
 
-    y += 48;
+    y += 8;
     doc.moveTo(320, y).lineTo(545, y).strokeColor("#e5e7eb").stroke();
     y += 10;
     doc.font("Helvetica").fontSize(10).fillColor("#6b7280").text("Amount due", 320, y, { width: 120 });

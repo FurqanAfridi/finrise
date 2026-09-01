@@ -97,6 +97,8 @@ model Tenant {
   publisherInvoices    PublisherInvoice[]
   buyerDailyFigures    BuyerDailyFigure[]
   publisherDailyFigures PublisherDailyFigure[]
+  buyerEmails          BuyerEmail[]
+  buyerInvoiceLines    BuyerInvoiceLine[]
   expenses             Expense[]
   expenseCategories    ExpenseCategory[]
   recurringExpenses    RecurringExpense[]
@@ -199,6 +201,7 @@ model Buyer {
   contractStartDate       DateTime?           @db.Date
   isActive                Boolean             @default(true)
   invoices                BuyerInvoice[]
+  emails                  BuyerEmail[]
   verticalOffers          BuyerVertical[]
   dailyFigures            BuyerDailyFigure[]
   memberships             TenantMembership[]
@@ -238,6 +241,7 @@ model Vertical {
   name               String
   isSystem           Boolean             @default(false)
   buyerInvoices      BuyerInvoice[]
+  buyerInvoiceLines  BuyerInvoiceLine[]
   publisherInvoices  PublisherInvoice[]
   buyerOffers        BuyerVertical[]
   publisherOffers    PublisherVertical[]
@@ -246,6 +250,42 @@ model Vertical {
 
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+model BuyerEmail {
+  id        String  @id @default(cuid())
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  buyer     Buyer   @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerId   String
+  email     String
+  label     String?
+  isPrimary Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  @@unique([buyerId, email])
+  @@index([tenantId])
+  @@index([buyerId])
+}
+
+/** Line items on a buyer invoice — one row per vertical billed. */
+model BuyerInvoiceLine {
+  id             String       @id @default(cuid())
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId       String
+  buyerInvoice   BuyerInvoice @relation(fields: [buyerInvoiceId], references: [id], onDelete: Cascade)
+  buyerInvoiceId String
+  vertical       Vertical?    @relation(fields: [verticalId], references: [id])
+  verticalId     String?
+  leadCount      Decimal?     @db.Decimal(14, 2)
+  rateType       RateType     @default(CPL)
+  rate           Decimal?     @db.Decimal(14, 4)
+  amount         Decimal      @db.Decimal(14, 2)
+  comments       String?
+  sortOrder      Int          @default(0)
+
+  @@index([tenantId])
+  @@index([buyerInvoiceId])
 }
 
 /** A buyer can buy more than one vertical, each with its own rate and NET terms. */
@@ -374,6 +414,7 @@ model BuyerInvoice {
   updatedAt        DateTime      @updatedAt
   emailLogs        InvoiceEmailLog[]
   dailyFigures     BuyerDailyFigure[]
+  lines            BuyerInvoiceLine[]
 
   @@index([tenantId])
   @@index([buyerId])

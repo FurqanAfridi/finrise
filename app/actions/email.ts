@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { InvoiceStatus, TenantRole } from "@prisma/client";
 import { APP_NAME } from "@/lib/brand";
 import { getCompanyBranding } from "@/lib/company-branding";
+import {
+  buildBuyerInvoiceDeliveryContext,
+  toBuyerInvoiceDeliveryPayload,
+} from "@/lib/buyer-invoice-delivery";
 import { invoiceEmailContent } from "@/lib/invoice-email";
 import { buildInvoicePdf, invoicePdfFilename } from "@/lib/invoice-pdf";
 import { prisma } from "@/lib/prisma";
@@ -152,63 +156,57 @@ export async function sendInvoiceEmailAction(
   const billing = await prisma.$queryRaw<{ email: string | null; address: string | null; contactName: string | null }[]>`
     SELECT email, address, "contactName" FROM "Buyer" WHERE id = ${invoice.buyerId} LIMIT 1
   `;
-  const override = parseEmail(formField(formData, "toEmail"), false);
-  if (!override.ok) return { error: override.error };
-  const to = override.value || billing[0]?.email || invoice.buyer.email;
-  const toEmail = parseEmail(to ?? "", true);
-  if (!toEmail.ok || !toEmail.value) {
+  const deliveryContext = await buildBuyerInvoiceDeliveryContext(ctx.tenantId, invoice, billing[0]);
+  const overrides = formData
+    .getAll("toEmail")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  const recipients =
+    overrides.length > 0
+      ? overrides
+      : deliveryContext.buyerEmails.length > 0
+        ? deliveryContext.buyerEmails
+        : billing[0]?.email
+          ? [billing[0].email]
+          : invoice.buyer.email
+            ? [invoice.buyer.email]
+            : [];
+  const validatedRecipients: string[] = [];
+  for (const recipient of recipients) {
+    const parsed = parseEmail(recipient, true);
+    if (!parsed.ok) return { error: parsed.error };
+    if (!parsed.value) return { error: "Add at least one valid buyer email." };
+    if (!validatedRecipients.includes(parsed.value)) validatedRecipients.push(parsed.value);
+  }
+  if (validatedRecipients.length === 0) {
     return { error: "This buyer has no email. Add one on the invoice or in Contacts, then send." };
   }
+  const to = validatedRecipients.join(", ");
 
   const [branding, currency] = await Promise.all([
     getCompanyBranding(ctx.tenantId, ctx.tenantName),
     getSetting(ctx.tenantId, "currency", "USD"),
   ]);
-  const content = invoiceEmailContent(
-    {
-      invoiceNumber: invoice.invoiceNumber,
-      periodLabel: invoice.periodLabel,
-      periodStart: invoice.periodStart,
-      periodEnd: invoice.periodEnd,
-      dueDate: invoice.dueDate,
-      createdAt: invoice.createdAt,
-      leadCount: invoice.leadCount,
-      rateType: invoice.rateType,
-      rate: invoice.rate,
-      revenue: invoice.revenue,
-      receivable: invoice.receivable,
-      terms: invoice.terms,
-      paymentTermsDays: invoice.paymentTermsDays,
-      comments: invoice.comments,
-      buyerName: invoice.buyer.name,
-      buyerEmail: toEmail.value,
-      buyerAddress: billing[0]?.address ?? invoice.buyer.address,
-      buyerContact: billing[0]?.contactName ?? invoice.buyer.contactName,
-      verticalName: invoice.vertical?.name ?? null,
-    },
-    branding,
-    currency,
-  );
+  const payload = toBuyerInvoiceDeliveryPayload(invoice, deliveryContext);
+  const content = invoiceEmailContent(payload, branding, currency);
 
   const pdfInput = {
-    invoiceNumber: invoice.invoiceNumber,
-    periodLabel: invoice.periodLabel,
-    periodStart: invoice.periodStart,
-    periodEnd: invoice.periodEnd,
-    dueDate: invoice.dueDate,
-    createdAt: invoice.createdAt,
-    leadCount: invoice.leadCount,
-    rateType: invoice.rateType,
-    rate: invoice.rate,
-    revenue: invoice.revenue,
-    receivable: invoice.receivable,
-    paymentTermsDays: invoice.paymentTermsDays,
-    comments: invoice.comments,
-    buyerName: invoice.buyer.name,
-    buyerEmail: toEmail.value,
-    buyerAddress: billing[0]?.address ?? invoice.buyer.address,
-    buyerContact: billing[0]?.contactName ?? invoice.buyer.contactName,
-    verticalName: invoice.vertical?.name ?? null,
+    invoiceNumber: payload.invoiceNumber,
+    periodLabel: payload.periodLabel,
+    periodStart: payload.periodStart,
+    periodEnd: payload.periodEnd,
+    dueDate: payload.dueDate,
+    createdAt: payload.createdAt,
+    revenue: payload.revenue,
+    receivable: payload.receivable,
+    paymentTermsDays: payload.paymentTermsDays,
+    comments: payload.comments,
+    buyerName: payload.buyerName,
+    buyerEmails: payload.buyerEmails,
+    buyerAddress: payload.buyerAddress,
+    buyerContact: payload.buyerContact,
+    verticalName: payload.verticalName,
+    lines: payload.lines,
   };
 
   let pdf: Buffer;
@@ -221,7 +219,7 @@ export async function sendInvoiceEmailAction(
 
   try {
     const sent = await sendSmtpMail(ctx.tenantId, {
-      to: toEmail.value,
+      to,
       subject: content.subject,
       text: content.text,
       html: content.html,
@@ -238,7 +236,7 @@ export async function sendInvoiceEmailAction(
       await logInvoiceEmail({
         tenantId: ctx.tenantId,
         buyerInvoiceId: invoice.id,
-        toEmail: toEmail.value,
+        toEmail: to,
         subject: content.subject,
         status: "FAILED",
         error: sent.error,
@@ -249,7 +247,7 @@ export async function sendInvoiceEmailAction(
     await logInvoiceEmail({
       tenantId: ctx.tenantId,
       buyerInvoiceId: invoice.id,
-      toEmail: toEmail.value,
+      toEmail: to,
       subject: content.subject,
       status: "SENT",
       sentById: ctx.userId,
@@ -262,7 +260,7 @@ export async function sendInvoiceEmailAction(
       tenantId: ctx.tenantId,
       type: NOTIFICATION.INVOICE_EMAILED,
       title: "Invoice emailed",
-      body: `${content.subject} sent to ${toEmail.value}`,
+      body: `${content.subject} sent to ${to}`,
       href: `/invoices/${invoice.id}`,
       excludeUserId: ctx.userId,
     });
@@ -275,7 +273,7 @@ export async function sendInvoiceEmailAction(
     await logInvoiceEmail({
       tenantId: ctx.tenantId,
       buyerInvoiceId: invoice.id,
-      toEmail: toEmail.value,
+      toEmail: to,
       subject: content.subject,
       status: "FAILED",
       error: message,

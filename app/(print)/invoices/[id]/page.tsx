@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Box from "@mui/material/Box";
 import { BuyerInvoiceDocument } from "@/components/buyer-invoice-document";
 import { InvoicePrintToolbar } from "@/components/invoice-print-toolbar";
+import { buildBuyerInvoiceDeliveryContext } from "@/lib/buyer-invoice-delivery";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { getSetting } from "@/lib/queries";
 import { prisma } from "@/lib/prisma";
@@ -23,13 +24,14 @@ export default async function BuyerInvoicePrintPage({
   assertBuyerInvoiceAccess(ctx, invoice.buyerId);
 
   const writer = canWrite(ctx.tenantRole, ctx.platformRole);
-  const [branding, currency, billing, mailboxes] = await Promise.all([
+  const [branding, currency, billing, mailboxes, deliveryContext] = await Promise.all([
     getCompanyBranding(ctx.tenantId, ctx.tenantName),
     getSetting(ctx.tenantId, "currency", "USD"),
     prisma.$queryRaw<{ email: string | null; address: string | null; contactName: string | null }[]>`
       SELECT email, address, "contactName" FROM "Buyer" WHERE id = ${invoice.buyerId} LIMIT 1
     `,
     writer ? listSmtpMailboxes(ctx.tenantId) : Promise.resolve([]),
+    buildBuyerInvoiceDeliveryContext(ctx.tenantId, invoice, null),
   ]);
   const billTo = billing[0];
   const document = {
@@ -37,9 +39,11 @@ export default async function BuyerInvoicePrintPage({
     buyer: {
       ...invoice.buyer,
       email: billTo?.email ?? invoice.buyer.email ?? null,
+      emails: deliveryContext.buyerEmails,
       address: billTo?.address ?? invoice.buyer.address ?? null,
       contactName: billTo?.contactName ?? invoice.buyer.contactName ?? null,
     },
+    lines: deliveryContext.lines,
   };
 
   return (

@@ -1,5 +1,6 @@
 import { APP_NAME } from "@/lib/brand";
 import { paymentDetailLines, type CompanyBranding } from "@/lib/company-branding";
+import type { InvoiceLineDisplay } from "@/lib/invoice-lines";
 import { displayDate } from "@/lib/dates";
 import { formatNetTerms } from "@/lib/finance/invoice";
 import { invoiceOnAccent, normalizeInvoiceColor } from "@/lib/invoice-theme";
@@ -14,19 +15,17 @@ type InvoiceEmailInput = {
   periodEnd: Date | null;
   dueDate: Date | null;
   createdAt: Date;
-  leadCount: unknown;
-  rateType: keyof typeof RATE_TYPE_LABEL;
-  rate: unknown;
   revenue: unknown;
   receivable: unknown;
   terms: string | null;
   paymentTermsDays: number | null;
   comments: string | null;
   buyerName: string;
-  buyerEmail: string;
+  buyerEmails: string[];
   buyerAddress: string | null;
   buyerContact: string | null;
   verticalName: string | null;
+  lines: InvoiceLineDisplay[];
 };
 
 function escapeHtml(value: string) {
@@ -37,18 +36,20 @@ function escapeHtml(value: string) {
     .replaceAll('"', "&quot;");
 }
 
+function lineDescription(line: InvoiceLineDisplay, periodLabel: string | null) {
+  return (
+    line.comments ||
+    [line.verticalName, periodLabel].filter(Boolean).join(" · ") ||
+    "Advertising / lead generation"
+  );
+}
+
 export function invoiceEmailContent(
   invoice: InvoiceEmailInput,
   branding: CompanyBranding,
   currency: string,
 ) {
   const amount = num(invoice.receivable) || num(invoice.revenue);
-  const qty = invoice.leadCount == null ? null : num(invoice.leadCount);
-  const rate = invoice.rate == null ? null : num(invoice.rate);
-  const description =
-    invoice.comments ||
-    [invoice.verticalName, invoice.periodLabel].filter(Boolean).join(" · ") ||
-    "Advertising / lead generation";
   const issueDate = invoice.periodEnd ?? invoice.periodStart ?? invoice.createdAt;
   const number = invoice.invoiceNumber || "Invoice";
   const subject = `Invoice ${number} from ${branding.legalName}`;
@@ -56,6 +57,23 @@ export function invoiceEmailContent(
   const bankLines = paymentDetailLines(branding);
   const accent = normalizeInvoiceColor(branding.invoiceColor);
   const onAccent = invoiceOnAccent(accent);
+  const emailList = invoice.buyerEmails.join(", ");
+
+  const lineText = invoice.lines
+    .map((line) => {
+      const description = lineDescription(line, invoice.periodLabel);
+      const qty = line.leadCount == null ? null : line.leadCount;
+      const rate = line.rate == null ? null : line.rate;
+      return [
+        description,
+        qty != null ? `Qty: ${qty}` : null,
+        rate != null ? `Rate: ${money(rate, currency)}` : null,
+        `Amount: ${money(line.amount, currency)}`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    })
+    .join("\n");
 
   const text = [
     `Invoice ${number}`,
@@ -65,13 +83,14 @@ export function invoiceEmailContent(
     "",
     `Bill to: ${invoice.buyerName}`,
     invoice.buyerContact ? `Contact: ${invoice.buyerContact}` : null,
+    emailList ? `Email: ${emailList}` : null,
     `Amount due: ${money(amount, currency)}`,
     `Invoice date: ${displayDate(issueDate)}`,
     `Due date: ${displayDate(invoice.dueDate)}`,
     `Terms: ${terms}`,
-    `Description: ${description}`,
-    qty != null ? `Quantity: ${qty}` : null,
-    rate != null ? `Rate: ${money(rate, currency)}` : null,
+    "",
+    "Line items",
+    lineText,
     bankLines.length
       ? `\nPayment details\n${bankLines.map((line) => `${line.label}: ${line.value}`).join("\n")}`
       : null,
@@ -82,6 +101,23 @@ export function invoiceEmailContent(
   ]
     .filter((line) => line != null)
     .join("\n");
+
+  const lineRowsHtml = invoice.lines
+    .map((line) => {
+      const description = lineDescription(line, invoice.periodLabel);
+      const qty = line.leadCount == null ? null : line.leadCount;
+      const rate = line.rate == null ? null : line.rate;
+      const sub = [RATE_TYPE_LABEL[line.rateType], line.verticalName].filter(Boolean).join(" · ");
+      return `<tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
+          <strong>${escapeHtml(description)}</strong>${sub ? `<br/><span style="color:#6b7280;font-size:12px;">${escapeHtml(sub)}</span>` : ""}
+        </td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align:right;">${qty != null ? qty.toLocaleString() : "n/a"}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align:right;">${rate != null ? escapeHtml(money(rate, currency)) : "n/a"}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align:right;">${escapeHtml(money(line.amount, currency))}</td>
+      </tr>`;
+    })
+    .join("");
 
   const html = `
     <div style="font-family: Arial, sans-serif; color: #111827; max-width: 640px; margin: 0 auto;">
@@ -102,16 +138,23 @@ export function invoiceEmailContent(
       <p style="color: #4b5563; margin: 0 0 24px;">${escapeHtml(number)}</p>
       <p><strong>Bill to</strong><br/>${escapeHtml(invoice.buyerName)}${
         invoice.buyerContact ? `<br/>${escapeHtml(invoice.buyerContact)}` : ""
-      }${invoice.buyerAddress ? `<br/>${escapeHtml(invoice.buyerAddress)}` : ""}</p>
+      }${invoice.buyerAddress ? `<br/>${escapeHtml(invoice.buyerAddress)}` : ""}${
+        emailList ? `<br/>${escapeHtml(emailList)}` : ""
+      }</p>
       <table style="width: 100%; border-collapse: collapse; margin: 24px 0;">
         <tr><td style="padding: 6px 0; color: #6b7280;">Invoice date</td><td style="text-align: right;">${escapeHtml(displayDate(issueDate))}</td></tr>
         <tr><td style="padding: 6px 0; color: #6b7280;">Due date</td><td style="text-align: right;">${escapeHtml(displayDate(invoice.dueDate))}</td></tr>
         <tr><td style="padding: 6px 0; color: #6b7280;">Terms</td><td style="text-align: right;">${escapeHtml(terms)}</td></tr>
+      </table>
+      <table style="width: 100%; border-collapse: collapse; margin: 0 0 24px;">
         <tr style="background: ${accent}; color: ${onAccent};">
-          <td style="padding: 8px;">${escapeHtml(description)}</td>
-          <td style="text-align: right; padding: 8px;">${qty != null ? `${qty} × ` : ""}${rate != null ? escapeHtml(money(rate, currency)) : ""}</td>
+          <th style="padding: 8px; text-align: left;">Description</th>
+          <th style="padding: 8px; text-align: right;">Qty</th>
+          <th style="padding: 8px; text-align: right;">Rate</th>
+          <th style="padding: 8px; text-align: right;">Amount</th>
         </tr>
-        <tr><td style="padding: 10px 0; font-weight: 800; color: ${accent};">Amount due</td><td style="text-align: right; font-weight: 800; color: ${accent};">${escapeHtml(money(amount, currency))}</td></tr>
+        ${lineRowsHtml}
+        <tr><td colspan="3" style="padding: 10px 0; font-weight: 800; color: ${accent};">Amount due</td><td style="text-align: right; font-weight: 800; color: ${accent};">${escapeHtml(money(amount, currency))}</td></tr>
       </table>
       ${
         bankLines.length

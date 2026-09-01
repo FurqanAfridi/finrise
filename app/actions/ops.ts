@@ -21,6 +21,7 @@ import {
   removeBuyerVerticalOffer,
   removePublisherVerticalOffer,
 } from "@/lib/contact-verticals";
+import { parseBuyerEmailsFromForm, syncBuyerEmails } from "@/lib/buyer-emails";
 import { getCompanyBranding } from "@/lib/company-branding";
 import { inviteEmailContent } from "@/lib/invite-email";
 import { INVITE_FROM_EMAIL, platformMailReady, sendPlatformMail } from "@/lib/platform-mail";
@@ -488,8 +489,8 @@ export async function upsertDirectory(
   if (!name.ok) return invalid("name", name.error);
 
   if (kind === "buyer") {
-    const email = parseEmail(formField(formData, "email"), true);
-    if (!email.ok || !email.value) return invalid("email", email.ok ? "Email is required." : email.error);
+    const emails = parseBuyerEmailsFromForm(formData);
+    if (!emails.ok) return invalid("email", emails.error);
     const contactName = parsePersonName(formField(formData, "contactName"), "Contact name");
     if (!contactName.ok) return invalid("contactName", contactName.error);
     const address = formField(formData, "address").trim();
@@ -522,7 +523,7 @@ export async function upsertDirectory(
         where: { id: existingId },
         data: {
           name: name.value,
-          email: email.value,
+          email: emails.value[0],
           address,
           contactName: contactName.value,
           defaultTerms,
@@ -531,6 +532,7 @@ export async function upsertDirectory(
           contractStartDate: contractStart.value,
         },
       });
+      await syncBuyerEmails(ctx.tenantId, existingId, emails.value);
     } else {
       buyerId = `c${randomBytes(12).toString("hex")}`;
       await prisma.buyer.create({
@@ -538,7 +540,7 @@ export async function upsertDirectory(
           id: buyerId,
           tenantId: ctx.tenantId,
           name: name.value,
-          email: email.value,
+          email: emails.value[0],
           address,
           contactName: contactName.value,
           defaultTerms,
@@ -547,6 +549,7 @@ export async function upsertDirectory(
           contractStartDate: contractStart.value,
         },
       });
+      await syncBuyerEmails(ctx.tenantId, buyerId, emails.value);
       for (const offer of offers.value) {
         await addBuyerVerticalOffer({ tenantId: ctx.tenantId, buyerId, ...offer });
       }

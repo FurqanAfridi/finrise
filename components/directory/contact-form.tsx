@@ -8,6 +8,7 @@ import Typography from "@mui/material/Typography";
 import { RateType } from "@prisma/client";
 import { upsertDirectory } from "@/app/actions/ops";
 import { NativeSelect, NetDaysSelect, TextInput } from "@/components/forms";
+import { BuyerEmailRowsEditor } from "@/components/invoice-line-rows-editor";
 import { netTermsReminder } from "@/lib/billing-cycle";
 import { isoDate } from "@/lib/dates";
 import { RATE_TYPE_LABEL } from "@/lib/status";
@@ -32,6 +33,7 @@ export function ContactForm({
     id: string;
     name: string;
     email: string | null;
+    emails?: string[];
     contactName: string | null;
     address: string | null;
     defaultTerms: string | null;
@@ -48,6 +50,9 @@ export function ContactForm({
   const [offers, setOffers] = useState<OfferDraft[]>([
     { key: "1", verticalId: "", paymentTermsDays: "7", rate: "", rateType: RateType.CPL, terms: "" },
   ]);
+  const [buyerEmails, setBuyerEmails] = useState<string[]>(
+    contact?.emails?.length ? contact.emails : contact?.email ? [contact.email] : [""],
+  );
   const editing = Boolean(contact?.id);
 
   return (
@@ -80,16 +85,22 @@ export function ContactForm({
         errorMessage={errors.contactName}
         autoComplete="name"
       />
-      <TextInput
-        label="Email"
-        name="email"
-        type="email"
-        required
-        maxLength={254}
-        defaultValue={contact?.email ?? ""}
-        errorMessage={errors.email}
-        autoComplete="email"
-      />
+      {kind === "buyer" ? (
+        <Box sx={{ gridColumn: "1 / -1" }}>
+          <BuyerEmailRowsEditor emails={buyerEmails} setEmails={setBuyerEmails} />
+        </Box>
+      ) : (
+        <TextInput
+          label="Email"
+          name="email"
+          type="email"
+          required
+          maxLength={254}
+          defaultValue={contact?.email ?? ""}
+          errorMessage={errors.email}
+          autoComplete="email"
+        />
+      )}
       <NetDaysSelect
         name="defaultPaymentTermsDays"
         label="Default NET days"

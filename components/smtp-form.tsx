@@ -249,12 +249,12 @@ export function SmtpSettingsForm({ mailboxes }: { mailboxes: SmtpMailboxPublic[]
 
 export function SendInvoiceButton({
   invoiceId,
-  toEmail,
+  toEmails,
   compact,
   mailboxes = [],
 }: {
   invoiceId: string;
-  toEmail?: string | null;
+  toEmails?: string[] | null;
   compact?: boolean;
   mailboxes?: SmtpMailboxPublic[];
 }) {
@@ -269,7 +269,9 @@ export function SendInvoiceButton({
       sx={{ display: compact ? "inline-flex" : "grid", gap: 1, alignItems: "center" }}
     >
       <input type="hidden" name="id" value={invoiceId} />
-      {toEmail ? <input type="hidden" name="toEmail" value={toEmail} /> : null}
+      {(toEmails ?? []).map((email) => (
+        <input key={email} type="hidden" name="toEmail" value={email} />
+      ))}
       <Stack direction={compact ? "row" : "column"} spacing={1} sx={{ alignItems: compact ? "center" : "stretch" }}>
         {ready.length > 1 ? (
           <Box sx={{ minWidth: compact ? 180 : "100%" }}>

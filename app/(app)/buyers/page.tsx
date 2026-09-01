@@ -8,6 +8,8 @@ import { FilterBar } from "@/components/shared/filter-bar";
 import { MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
+import { listBuyerEmailsByBuyerIds } from "@/lib/buyer-emails";
+import { invoiceVerticalLabel } from "@/lib/invoice-lines";
 import { formatMoney } from "@/lib/money";
 import { monthPeriodFilter } from "@/lib/finance/period";
 import { invoiceVariance, isOverdue } from "@/lib/finance/variance";
@@ -92,6 +94,27 @@ export default async function BuyersPage({
     writer ? listSmtpMailboxes(ctx.tenantId) : Promise.resolve([]),
   ]);
 
+  const buyerIds = [...new Set(rows.map((row) => row.buyerId))];
+  const invoiceIds = rows.map((row) => row.id);
+  const [emailsByBuyer, linesByInvoice] = await Promise.all([
+    buyerIds.length ? listBuyerEmailsByBuyerIds(ctx.tenantId, buyerIds) : Promise.resolve({} as Record<string, string[]>),
+    invoiceIds.length
+      ? prisma.buyerInvoiceLine.findMany({
+          where: { tenantId: ctx.tenantId, buyerInvoiceId: { in: invoiceIds } },
+          include: { vertical: { select: { name: true } } },
+          orderBy: { sortOrder: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
+  type InvoiceLineRow = Awaited<ReturnType<typeof prisma.buyerInvoiceLine.findMany>>[number] & {
+    vertical: { name: string } | null;
+  };
+  const linesGrouped = linesByInvoice.reduce<Record<string, InvoiceLineRow[]>>((acc, line) => {
+    if (!acc[line.buyerInvoiceId]) acc[line.buyerInvoiceId] = [];
+    acc[line.buyerInvoiceId].push(line);
+    return acc;
+  }, {});
+
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const paginationQuery: Record<string, string> = {};
   if (q) paginationQuery.q = q;
@@ -119,11 +142,31 @@ export default async function BuyersPage({
       row.received?.toString() ?? 0,
       settings.varianceToleranceAmount,
     );
+    const lineRows = linesGrouped[row.id] ?? [];
+    const verticalName =
+      lineRows.length > 0
+        ? invoiceVerticalLabel(
+            lineRows.map((line) => ({
+              verticalName: line.vertical?.name ?? null,
+              leadCount: line.leadCount == null ? null : Number(line.leadCount),
+              rateType: line.rateType,
+              rate: line.rate == null ? null : Number(line.rate),
+              amount: Number(line.amount),
+              comments: line.comments,
+            })),
+          )
+        : row.vertical?.name ?? null;
+    const buyerEmails =
+      emailsByBuyer[row.buyerId]?.length > 0
+        ? emailsByBuyer[row.buyerId]
+        : row.buyer.email
+          ? [row.buyer.email]
+          : [];
     return {
       id: row.id,
       buyerName: row.buyer.name,
-      buyerEmail: row.buyer.email,
-      verticalName: row.vertical?.name ?? null,
+      buyerEmails,
+      verticalName,
       periodLabel: row.periodLabel,
       invoiceNumber: row.invoiceNumber,
       dueDate: row.dueDate ? row.dueDate.toISOString() : null,

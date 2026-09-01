@@ -2,10 +2,12 @@ import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import type { RateType } from "@prisma/client";
 import { paymentDetailLines, type CompanyBranding } from "@/lib/company-branding";
 import { displayDate } from "@/lib/dates";
 import { formatNetTerms } from "@/lib/finance/invoice";
 import { invoiceOnAccent, normalizeInvoiceColor } from "@/lib/invoice-theme";
+import type { InvoiceLineDisplay } from "@/lib/invoice-lines";
 import { money } from "@/lib/money";
 import { RATE_TYPE_LABEL } from "@/lib/status";
 import { num } from "@/lib/utils";
@@ -17,22 +19,27 @@ type InvoiceDoc = {
   periodEnd: Date | null;
   dueDate: Date | null;
   createdAt: Date;
-  leadCount: unknown;
-  rateType: keyof typeof RATE_TYPE_LABEL;
-  rate: unknown;
   revenue: unknown;
   receivable: unknown;
   terms: string | null;
   paymentTermsDays: number | null;
-  comments: string | null;
   buyer: {
     name: string;
     email: string | null;
+    emails?: string[];
     address: string | null;
     contactName: string | null;
   };
-  vertical: { name: string } | null;
+  lines: InvoiceLineDisplay[];
 };
+
+function lineDescription(line: InvoiceLineDisplay, periodLabel: string | null) {
+  return (
+    line.comments ||
+    [line.verticalName, periodLabel].filter(Boolean).join(" · ") ||
+    "Advertising / lead generation"
+  );
+}
 
 export function BuyerInvoiceDocument({
   invoice,
@@ -44,17 +51,16 @@ export function BuyerInvoiceDocument({
   currency: string;
 }) {
   const amount = num(invoice.receivable) || num(invoice.revenue);
-  const qty = invoice.leadCount == null ? null : num(invoice.leadCount);
-  const rate = invoice.rate == null ? null : num(invoice.rate);
-  const description =
-    invoice.comments ||
-    [invoice.vertical?.name, invoice.periodLabel].filter(Boolean).join(" · ") ||
-    "Advertising / lead generation";
   const issueDate = invoice.periodEnd ?? invoice.periodStart ?? invoice.createdAt;
   const accent = normalizeInvoiceColor(branding.invoiceColor);
   const onAccent = invoiceOnAccent(accent);
   const bankLines = paymentDetailLines(branding);
   const terms = formatNetTerms(invoice.paymentTermsDays);
+  const emailList = invoice.buyer.emails?.length
+    ? invoice.buyer.emails
+    : invoice.buyer.email
+      ? [invoice.buyer.email]
+      : [];
 
   return (
     <Box
@@ -115,11 +121,11 @@ export function BuyerInvoiceDocument({
               {invoice.buyer.address}
             </Typography>
           ) : null}
-          {invoice.buyer.email ? (
-            <Typography variant="body2" sx={{ color: "#4b5563" }}>
-              {invoice.buyer.email}
+          {emailList.map((email) => (
+            <Typography key={email} variant="body2" sx={{ color: "#4b5563" }}>
+              {email}
             </Typography>
-          ) : null}
+          ))}
         </Box>
         <Box sx={{ minWidth: 220 }}>
           <Row label="Invoice date" value={displayDate(issueDate)} />
@@ -156,17 +162,24 @@ export function BuyerInvoiceDocument({
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>
-              <Typography sx={{ fontWeight: 600 }}>{description}</Typography>
-              <Typography variant="caption" sx={{ color: "#6b7280" }}>
-                {[RATE_TYPE_LABEL[invoice.rateType], invoice.vertical?.name].filter(Boolean).join(" · ")}
-              </Typography>
-            </td>
-            <td className="num">{qty == null ? "n/a" : qty.toLocaleString()}</td>
-            <td className="num">{rate == null ? "n/a" : money(rate, currency)}</td>
-            <td className="num">{money(amount, currency)}</td>
-          </tr>
+          {invoice.lines.map((line, index) => {
+            const qty = line.leadCount == null ? null : line.leadCount;
+            const rate = line.rate == null ? null : line.rate;
+            const description = lineDescription(line, invoice.periodLabel);
+            return (
+              <tr key={`${description}-${index}`}>
+                <td>
+                  <Typography sx={{ fontWeight: 600 }}>{description}</Typography>
+                  <Typography variant="caption" sx={{ color: "#6b7280" }}>
+                    {[RATE_TYPE_LABEL[line.rateType as RateType], line.verticalName].filter(Boolean).join(" · ")}
+                  </Typography>
+                </td>
+                <td className="num">{qty == null ? "n/a" : qty.toLocaleString()}</td>
+                <td className="num">{rate == null ? "n/a" : money(rate, currency)}</td>
+                <td className="num">{money(line.amount, currency)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </Box>
 

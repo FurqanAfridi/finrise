@@ -3,31 +3,35 @@
 import { useActionState, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { RateType } from "@prisma/client";
 import { generateBuyerInvoice } from "@/app/actions/invoices";
-import { NativeSelect, NetDaysSelect } from "@/components/forms";
 import { MainCard } from "@/components/berry/main-card";
+import {
+  BuyerEmailRowsEditor,
+  createInvoiceLineDraft,
+  InvoiceLineRowsEditor,
+  type InvoiceLineDraft,
+} from "@/components/invoice-line-rows-editor";
+import { NetDaysSelect } from "@/components/forms";
 import { WizardSteps } from "@/components/shared/wizard-steps";
 import { formatMoney } from "@/lib/money";
 import { isoDate } from "@/lib/dates";
-import { RATE_TYPE_LABEL } from "@/lib/status";
 import type { ContactVerticalOffer } from "@/lib/contact-verticals";
 
 type BuyerOption = {
   id: string;
   name: string;
   email: string | null;
+  emails: string[];
   address: string | null;
   contactName: string | null;
   defaultTerms: string | null;
   defaultPaymentTermsDays: number;
 };
 
-const STEPS = ["Buyer", "Amount", "Dates", "Review"];
+const STEPS = ["Buyer", "Line items", "Dates", "Review"];
 
 export function GenerateInvoiceForm({
   buyers,
@@ -47,45 +51,53 @@ export function GenerateInvoiceForm({
   const [invoiceNumber, setInvoiceNumber] = useState(nextNumber);
   const [invoiceDate, setInvoiceDate] = useState(isoDate(new Date()));
   const [contact, setContact] = useState(buyers[0]?.contactName ?? "");
-  const [email, setEmail] = useState(buyers[0]?.email ?? "");
+  const [emails, setEmails] = useState<string[]>(
+    buyers[0]?.emails.length ? buyers[0].emails : buyers[0]?.email ? [buyers[0].email] : [""],
+  );
   const [address, setAddress] = useState(buyers[0]?.address ?? "");
-  const [verticalId, setVerticalId] = useState("");
+  const [lines, setLines] = useState<InvoiceLineDraft[]>([createInvoiceLineDraft()]);
   const [periodLabel, setPeriodLabel] = useState("");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [leadCount, setLeadCount] = useState("");
-  const [rateType, setRateType] = useState<RateType>(RateType.CPL);
-  const [rate, setRate] = useState("");
-  const [amount, setAmount] = useState("");
-  const [amountUnlocked, setAmountUnlocked] = useState(false);
-  const [comments, setComments] = useState("");
   const [state, action] = useActionState(generateBuyerInvoice, {});
 
   const buyer = useMemo(() => buyers.find((row) => row.id === buyerId), [buyers, buyerId]);
   const netDaysDefault = buyer?.defaultPaymentTermsDays ?? defaultNetDays ?? 7;
   const [netDays, setNetDays] = useState(String(netDaysDefault));
-  const verticalName = verticals.find((row) => row.id === verticalId)?.name;
 
-  function applyVerticalDefaults(nextBuyerId: string, nextVerticalId: string) {
-    const offer = buyerVerticalOffers[nextBuyerId]?.find((row) => row.verticalId === nextVerticalId);
-    if (!offer) return;
-    setNetDays(String(offer.paymentTermsDays));
-    if (offer.rate != null) setRate(String(offer.rate));
-    setRateType(offer.rateType);
-  }
+  const invoiceTotal = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        const count = Number(line.leadCount || 0);
+        const unit = Number(line.rate || 0);
+        const computed = Math.round(count * unit * 100) / 100;
+        const amount =
+          line.amountUnlocked || line.rateType === "FLAT" || line.rateType === "PROFIT_SHARE"
+            ? Number(line.amount || 0)
+            : computed;
+        return sum + (Number.isFinite(amount) ? amount : 0);
+      }, 0),
+    [lines],
+  );
 
-  const computedAmount = useMemo(() => {
-    const count = Number(leadCount || 0);
-    const unit = Number(rate || 0);
-    if (rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE) return Number(amount || 0);
-    return Math.round(count * unit * 100) / 100;
-  }, [leadCount, rate, rateType, amount]);
-
-  const effectiveAmount =
-    amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE
-      ? Number(amount || 0)
-      : computedAmount;
+  const reviewLines = useMemo(
+    () =>
+      lines
+        .filter((line) => line.verticalId)
+        .map((line) => {
+          const verticalName = verticals.find((row) => row.id === line.verticalId)?.name ?? "Vertical";
+          const count = Number(line.leadCount || 0);
+          const unit = Number(line.rate || 0);
+          const computed = Math.round(count * unit * 100) / 100;
+          const amount =
+            line.amountUnlocked || line.rateType === "FLAT" || line.rateType === "PROFIT_SHARE"
+              ? Number(line.amount || 0)
+              : computed;
+          return `${verticalName} · ${formatMoney(amount)}`;
+        }),
+    [lines, verticals],
+  );
 
   if (buyers.length === 0) {
     return (
@@ -95,9 +107,11 @@ export function GenerateInvoiceForm({
     );
   }
 
+  const hasValidLines = lines.some((line) => line.verticalId && invoiceTotal > 0);
+  const hasValidEmails = emails.some((email) => email.trim().length > 0);
   const canNext =
-    (step === 0 && Boolean(buyerId)) ||
-    (step === 1 && effectiveAmount > 0) ||
+    (step === 0 && Boolean(buyerId) && hasValidEmails) ||
+    (step === 1 && hasValidLines) ||
     step === 2 ||
     step === 3;
 
@@ -109,19 +123,12 @@ export function GenerateInvoiceForm({
         <input type="hidden" name="invoiceNumber" value={invoiceNumber} />
         <input type="hidden" name="invoiceDate" value={invoiceDate} />
         <input type="hidden" name="buyerContact" value={contact} />
-        <input type="hidden" name="buyerEmail" value={email} />
         <input type="hidden" name="buyerAddress" value={address} />
-        <input type="hidden" name="verticalId" value={verticalId} />
         <input type="hidden" name="periodLabel" value={periodLabel} />
         <input type="hidden" name="periodStart" value={periodStart} />
         <input type="hidden" name="periodEnd" value={periodEnd} />
         <input type="hidden" name="dueDate" value={dueDate} />
-        <input type="hidden" name="leadCount" value={leadCount} />
-        <input type="hidden" name="rateType" value={rateType} />
-        <input type="hidden" name="rate" value={rate} />
-        <input type="hidden" name="revenue" value={String(effectiveAmount || "")} />
         <input type="hidden" name="paymentTermsDays" value={netDays} />
-        <input type="hidden" name="comments" value={comments} />
 
         {step === 0 ? (
           <Box sx={{ display: "grid", gap: 2, maxWidth: 560 }}>
@@ -140,11 +147,16 @@ export function GenerateInvoiceForm({
                 setBuyerId(nextBuyerId);
                 const nextBuyer = buyers.find((row) => row.id === nextBuyerId);
                 setContact(nextBuyer?.contactName ?? "");
-                setEmail(nextBuyer?.email ?? "");
+                setEmails(
+                  nextBuyer?.emails.length
+                    ? nextBuyer.emails
+                    : nextBuyer?.email
+                      ? [nextBuyer.email]
+                      : [""],
+                );
                 setAddress(nextBuyer?.address ?? "");
                 setNetDays(String(nextBuyer?.defaultPaymentTermsDays ?? defaultNetDays ?? 7));
-                setVerticalId("");
-                setRate("");
+                setLines([createInvoiceLineDraft()]);
               }}
               slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
             >
@@ -155,15 +167,7 @@ export function GenerateInvoiceForm({
               ))}
             </TextField>
             <TextField size="small" fullWidth label="Contact name" value={contact} onChange={(e) => setContact(e.target.value)} />
-            <TextField
-              size="small"
-              fullWidth
-              label="Buyer email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              helperText="Used when you email this invoice"
-            />
+            <BuyerEmailRowsEditor emails={emails} setEmails={setEmails} />
             <TextField
               size="small"
               fullWidth
@@ -177,145 +181,17 @@ export function GenerateInvoiceForm({
         ) : null}
 
         {step === 1 ? (
-          <Box sx={{ display: "grid", gap: 2, maxWidth: 560, gridTemplateColumns: { sm: "1fr 1fr" } }}>
-            <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1" }}>
-              What are you billing for?
+          <Box sx={{ maxWidth: 720 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Add one line per vertical. You can bill multiple verticals on the same invoice.
             </Typography>
-            <Box sx={{ gridColumn: "1 / -1" }}>
-              <TextField
-                select
-                size="small"
-                fullWidth
-                label="Vertical"
-                value={verticalId}
-                onChange={(e) => {
-                  const nextVerticalId = e.target.value;
-                  setVerticalId(nextVerticalId);
-                  if (nextVerticalId) applyVerticalDefaults(buyerId, nextVerticalId);
-                }}
-                slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-              >
-                <option value="">None</option>
-                {verticals.map((vertical) => (
-                  <option key={vertical.id} value={vertical.id}>
-                    {vertical.name}
-                  </option>
-                ))}
-              </TextField>
-            </Box>
-            <TextField
-              size="small"
-              fullWidth
-              label="Quantity / leads"
-              value={leadCount}
-              onChange={(e) => setLeadCount(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              slotProps={{ htmlInput: { inputMode: "numeric", maxLength: 10 } }}
+            <InvoiceLineRowsEditor
+              lines={lines}
+              setLines={setLines}
+              verticals={verticals}
+              buyerVerticalOffers={buyerVerticalOffers}
+              buyerId={buyerId}
             />
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label="Rate type"
-              value={rateType}
-              onChange={(e) => {
-                const next = e.target.value as RateType;
-                setRateType(next);
-                setAmountUnlocked(next === RateType.FLAT || next === RateType.PROFIT_SHARE);
-              }}
-              slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-            >
-              {Object.values(RateType).map((value) => (
-                <option key={value} value={value}>
-                  {RATE_TYPE_LABEL[value]}
-                </option>
-              ))}
-            </TextField>
-            <TextField
-              size="small"
-              fullWidth
-              label="Lead cost / rate"
-              value={rate}
-              onChange={(e) => {
-                let next = e.target.value.replace(/[^\d.]/g, "");
-                const dot = next.indexOf(".");
-                if (dot !== -1) {
-                  next = `${next.slice(0, dot + 1)}${next.slice(dot + 1).replace(/\./g, "").slice(0, 4)}`;
-                }
-                setRate(next.slice(0, 16));
-              }}
-              disabled={rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE}
-              slotProps={{ htmlInput: { inputMode: "decimal", maxLength: 16 }, inputLabel: { shrink: true } }}
-              helperText="Multiplied by lead count"
-            />
-            <TextField
-              size="small"
-              fullWidth
-              required
-              label="Revenue"
-              value={
-                amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE
-                  ? amount
-                  : computedAmount
-                    ? computedAmount.toFixed(2)
-                    : ""
-              }
-              onChange={(e) => {
-                if (!(amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE)) return;
-                let next = e.target.value.replace(/[^\d.]/g, "");
-                const dot = next.indexOf(".");
-                if (dot !== -1) {
-                  next = `${next.slice(0, dot + 1)}${next.slice(dot + 1).replace(/\./g, "").slice(0, 2)}`;
-                }
-                setAmount(next.slice(0, 16));
-              }}
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: {
-                  inputMode: "decimal",
-                  maxLength: 16,
-                  readOnly: !(amountUnlocked || rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE),
-                },
-                input: {
-                  endAdornment:
-                    rateType === RateType.FLAT || rateType === RateType.PROFIT_SHARE ? undefined : (
-                      <InputAdornment position="end">
-                        <Button
-                          type="button"
-                          size="small"
-                          onClick={() => {
-                            if (!amountUnlocked) {
-                              setAmount(computedAmount ? computedAmount.toFixed(2) : "");
-                              setAmountUnlocked(true);
-                            } else {
-                              setAmountUnlocked(false);
-                            }
-                          }}
-                        >
-                          {amountUnlocked ? "Use calc" : "Edit"}
-                        </Button>
-                      </InputAdornment>
-                    ),
-                },
-              }}
-              helperText={
-                amountUnlocked
-                  ? "Manual override. Click Use calc to return to lead count × rate"
-                  : `Auto: ${leadCount || "0"} × ${rate || "0"} = ${formatMoney(computedAmount)}. Click Edit to override.`
-              }
-            />
-            <Box sx={{ gridColumn: "1 / -1" }}>
-              <TextField
-                size="small"
-                fullWidth
-                label="Line description"
-                multiline
-                minRows={2}
-                value={comments}
-                onChange={(e) => setComments(e.target.value.slice(0, 500))}
-                helperText="Shown on the invoice under the line item"
-                slotProps={{ htmlInput: { maxLength: 500 } }}
-              />
-            </Box>
           </Box>
         ) : null}
 
@@ -395,14 +271,12 @@ export function GenerateInvoiceForm({
             </Typography>
             <Stack spacing={1.25} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
               <ReviewRow label="Buyer" value={buyer?.name ?? "None"} />
-              <ReviewRow label="Email" value={email || "None"} />
+              <ReviewRow label="Emails" value={emails.filter(Boolean).join(", ") || "None"} />
               <ReviewRow label="Invoice #" value={invoiceNumber} />
-              <ReviewRow label="Amount" value={effectiveAmount ? formatMoney(effectiveAmount) : "None"} money />
+              <ReviewRow label="Amount" value={invoiceTotal ? formatMoney(invoiceTotal) : "None"} money />
               <ReviewRow label="Terms" value={`Net - ${netDays || "0"}`} />
-              <ReviewRow label="Rate" value={`${RATE_TYPE_LABEL[rateType]}${rate ? ` · ${rate}` : ""}`} />
-              <ReviewRow label="Vertical" value={verticalName || "None"} />
+              <ReviewRow label="Lines" value={reviewLines.length ? reviewLines.join(" · ") : "None"} />
               <ReviewRow label="Period" value={periodLabel || "None"} />
-              <ReviewRow label="Description" value={comments || "None"} />
             </Stack>
           </Box>
         ) : null}

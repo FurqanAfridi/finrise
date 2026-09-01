@@ -27,7 +27,7 @@ import type { SmtpMailboxPublic } from "@/lib/smtp";
 export type BuyerInvoiceRow = {
   id: string;
   buyerName: string;
-  buyerEmail: string | null;
+  buyerEmails: string[];
   verticalName: string | null;
   periodLabel: string | null;
   invoiceNumber: string | null;
@@ -245,7 +245,7 @@ export function BuyerInvoicesView({
               </Button>
               {canManage ? (
                 <>
-                  <SendInvoiceButton invoiceId={selected.id} toEmail={selected.buyerEmail} mailboxes={mailboxes} />
+                  <SendInvoiceButton invoiceId={selected.id} toEmails={selected.buyerEmails} mailboxes={mailboxes} />
                   <Button component={Link} href={`/buyers/${selected.id}`} variant="outlined" color="primary" fullWidth>
                     Edit ledger entry
                   </Button>

@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/shared/status-pill";
 import { displayDate } from "@/lib/dates";
 import { getDailyFiguresBoard } from "@/lib/daily-figures";
+import { listBuyerEmails } from "@/lib/buyer-emails";
 import { prisma } from "@/lib/prisma";
 import { getDirectoryOptions } from "@/lib/queries";
 import { requireBrokerOps } from "@/lib/tenant";
@@ -24,7 +25,7 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
   const ctx = await requireBrokerOps();
   const { id } = await params;
   const now = new Date();
-  const [buyer, { verticals }, member, pendingInvite, figures] = await Promise.all([
+  const [buyer, { verticals }, member, pendingInvite, figures, buyerEmails] = await Promise.all([
     prisma.buyer.findFirst({
       where: { id, tenantId: ctx.tenantId },
       include: {
@@ -42,8 +43,14 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
       select: { email: true },
     }),
     getDailyFiguresBoard(ctx.tenantId, "buyer", id),
+    listBuyerEmails(ctx.tenantId, id),
   ]);
   if (!buyer) notFound();
+  const emailList = buyerEmails.length
+    ? buyerEmails.map((row) => row.email)
+    : buyer.email
+      ? [buyer.email]
+      : [];
 
   return (
     <Box>
@@ -72,7 +79,7 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
                 {buyer._count.invoices} invoice{buyer._count.invoices === 1 ? "" : "s"}
               </Typography>
             </Stack>
-            <Typography variant="body2">{[buyer.contactName, buyer.email, buyer.address].filter(Boolean).join(" · ")}</Typography>
+            <Typography variant="body2">{[buyer.contactName, emailList.join(", "), buyer.address].filter(Boolean).join(" · ")}</Typography>
             {buyer.contractStartDate ? (
               <Typography variant="body2" color="text.secondary">
                 Contract started {displayDate(buyer.contractStartDate)} · NET {buyer.defaultPaymentTermsDays} by default
@@ -92,7 +99,7 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
                 <ContactInviteButton
                   kind="buyer"
                   contactId={buyer.id}
-                  email={buyer.email}
+                  email={emailList[0] ?? buyer.email}
                   resend={Boolean(pendingInvite)}
                 />
               </>
@@ -118,6 +125,7 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
               id: buyer.id,
               name: buyer.name,
               email: buyer.email,
+              emails: emailList,
               contactName: buyer.contactName,
               address: buyer.address,
               defaultTerms: buyer.defaultTerms,

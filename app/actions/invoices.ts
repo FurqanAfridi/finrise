@@ -11,10 +11,15 @@ import { getFinanceSettings } from "@/lib/finance/queries";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { nextBuyerInvoiceNumber } from "@/lib/company-branding";
 import { applyBuyerVerticalDefaults, applyPublisherVerticalDefaults } from "@/lib/contact-verticals";
+import { parseBuyerEmailsFromForm, syncBuyerEmails } from "@/lib/buyer-emails";
+import {
+  parseInvoiceLineRowsFromForm,
+  replaceBuyerInvoiceLines,
+  summarizeInvoiceLines,
+} from "@/lib/invoice-lines";
 import { lockedFinanceErrorForDates } from "@/lib/finance/month-lock";
 import {
   formField,
-  parseEmail,
   parseInteger,
   parseMoney,
   parseFormDate,
@@ -76,21 +81,24 @@ export async function upsertBuyerInvoice(
   if (id && !existing) return { error: "Invoice not found." };
 
   const verticalId = str(formData, "verticalId");
+  const lineRows = parseInvoiceLineRowsFromForm(formData);
+  if (!lineRows.ok) return { error: lineRows.error };
+  const summary = summarizeInvoiceLines(lineRows.value);
   const verticalDefaults = await applyBuyerVerticalDefaults({
     tenantId: ctx.tenantId,
     buyerId,
-    verticalId,
+    verticalId: summary.verticalId,
     fallbackTermsDays: buyer.defaultPaymentTermsDays ?? 7,
     fallbackTerms: buyer.defaultTerms,
   });
 
-  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), verticalDefaults.rateType);
-  const leadCount = dec(formData, "leadCount");
-  let rate = dec(formData, "rate");
+  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), summary.rateType);
+  const leadCount = summary.leadCount ?? dec(formData, "leadCount");
+  let rate = summary.rate ?? dec(formData, "rate");
   if ((rate == null || Number.isNaN(rate)) && verticalDefaults.rate != null) {
     rate = verticalDefaults.rate;
   }
-  const revenueInput = dec(formData, "revenue");
+  const revenueInput = summary.revenue ?? dec(formData, "revenue");
   const receivableInput = dec(formData, "receivable");
   const received = dec(formData, "received");
   const bankCredit = dec(formData, "bankCredit");
@@ -129,7 +137,7 @@ export async function upsertBuyerInvoice(
   const data = {
     tenantId: ctx.tenantId,
     buyerId,
-    verticalId,
+    verticalId: summary.verticalId,
     periodLabel: str(formData, "periodLabel"),
     periodStart,
     periodEnd,
@@ -151,12 +159,13 @@ export async function upsertBuyerInvoice(
     bankCredit,
     paidAt: date(formData, "paidAt"),
     paymentMethod: str(formData, "paymentMethod"),
-    comments: str(formData, "comments"),
+    comments: summary.comments ?? str(formData, "comments"),
   };
 
   const saved = id
     ? await prisma.buyerInvoice.update({ where: { id }, data })
     : await prisma.buyerInvoice.create({ data });
+  await replaceBuyerInvoiceLines(ctx.tenantId, saved.id, lineRows.value);
 
   const settings = await getFinanceSettings(ctx.tenantId);
   const variance = invoiceVariance(saved.receivable.toString(), saved.received?.toString() ?? 0, settings.varianceToleranceAmount);
@@ -232,30 +241,22 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   const buyer = await prisma.buyer.findFirst({ where: { id: buyerId, tenantId: ctx.tenantId } });
   if (!buyer) return { error: "Buyer not found." };
 
-  const buyerEmail = parseEmail(formField(formData, "buyerEmail"), false);
-  if (!buyerEmail.ok) return { error: buyerEmail.error };
+  const buyerEmails = parseBuyerEmailsFromForm(formData);
+  if (!buyerEmails.ok) return { error: buyerEmails.error };
   const buyerContact = parseOptionalPersonName(formField(formData, "buyerContact"), "Contact name");
   if (!buyerContact.ok) return { error: buyerContact.error };
   const buyerAddress = str(formData, "buyerAddress") ?? buyer.address;
-  const verticalId = str(formData, "verticalId");
+  const lineRows = parseInvoiceLineRowsFromForm(formData);
+  if (!lineRows.ok) return { error: lineRows.error };
+  const summary = summarizeInvoiceLines(lineRows.value);
   const verticalDefaults = await applyBuyerVerticalDefaults({
     tenantId: ctx.tenantId,
     buyerId,
-    verticalId,
+    verticalId: summary.verticalId,
     fallbackTermsDays: buyer.defaultPaymentTermsDays ?? 7,
     fallbackTerms: buyer.defaultTerms,
   });
 
-  const leadCount = parseInteger(formField(formData, "leadCount"), "Quantity", 0, 1_000_000, false);
-  if (!leadCount.ok) return { error: leadCount.error };
-  const rateParsed = parseMoney(formField(formData, "rate"), "Rate", false);
-  if (!rateParsed.ok) return { error: rateParsed.error };
-  const rateValue =
-    rateParsed.value == null || rateParsed.value === 0
-      ? verticalDefaults.rate ?? rateParsed.value
-      : rateParsed.value;
-  const amount = parseMoney(formField(formData, "revenue"), "Amount", false);
-  if (!amount.ok) return { error: amount.error };
   const netDays = parseInteger(formField(formData, "paymentTermsDays"), "NET days", 0, 365, true);
   if (!netDays.ok || netDays.value == null) {
     return { error: netDays.ok ? "NET days is required." : netDays.error };
@@ -274,17 +275,15 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   await prisma.$executeRaw`
     UPDATE "Buyer"
     SET
-      email = ${buyerEmail.value ?? buyer.email},
       address = ${buyerAddress},
       "contactName" = ${buyerContact.value ?? buyer.contactName}
     WHERE id = ${buyer.id} AND "tenantId" = ${ctx.tenantId}
   `;
+  await syncBuyerEmails(ctx.tenantId, buyer.id, buyerEmails.value);
 
-  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), verticalDefaults.rateType);
-  const revenueFromForm = amount.value;
-  const computedRevenue = lineTotal(rateType, leadCount.value, rateValue, revenueFromForm).toNumber();
-  const revenue = revenueFromForm && revenueFromForm > 0 ? revenueFromForm : computedRevenue;
-  if (!revenue || revenue <= 0) return { error: "Enter lead count and rate, or set the amount." };
+  const rateType = summary.rateType;
+  const revenue = summary.revenue;
+  if (!revenue || revenue <= 0) return { error: "Add at least one line with an amount." };
   const receivable = revenue;
   const paymentTermsDays = netDays.value ?? verticalDefaults.paymentTermsDays;
   const terms = str(formData, "terms") ?? verticalDefaults.terms ?? formatNetTerms(paymentTermsDays);
@@ -300,15 +299,15 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
     data: {
       tenantId: ctx.tenantId,
       buyerId,
-      verticalId,
+      verticalId: summary.verticalId,
       periodLabel: str(formData, "periodLabel"),
       periodStart,
       periodEnd,
       invoiceDate,
       dueDate: due,
-      leadCount: leadCount.value,
+      leadCount: summary.leadCount,
       rateType,
-      rate: rateValue,
+      rate: summary.rate,
       revenue,
       invoiceNumber,
       terms,
@@ -316,9 +315,10 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
       paymentStatus: PaymentStatus.UNPAID,
       invoiceStatus: InvoiceStatus.SENT,
       receivable,
-      comments: str(formData, "comments"),
+      comments: summary.comments,
     },
   });
+  await replaceBuyerInvoiceLines(ctx.tenantId, saved.id, lineRows.value);
 
   revalidateLedgers();
   redirect(`/invoices/${saved.id}`);
