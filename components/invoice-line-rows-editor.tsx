@@ -26,6 +26,45 @@ export type InvoiceLineDraft = {
 
 const DIRECT_TYPES = new Set<RateType>([RateType.FLAT, RateType.PROFIT_SHARE]);
 
+export function invoiceLineEffectiveAmount(line: InvoiceLineDraft) {
+  const count = Number(line.leadCount || 0);
+  const unit = Number(line.rate || 0);
+  const computed = DIRECT_TYPES.has(line.rateType)
+    ? Number(line.amount || 0)
+    : Math.round(count * unit * 100) / 100;
+  return line.amountUnlocked || DIRECT_TYPES.has(line.rateType) ? Number(line.amount || 0) : computed;
+}
+
+/** Always-mounted fields for multi-step invoice wizard submit. */
+export function InvoiceWizardHiddenFields({
+  emails,
+  lines,
+}: {
+  emails: string[];
+  lines: InvoiceLineDraft[];
+}) {
+  return (
+    <>
+      {emails.map((email, index) => (
+        <input key={`wizard-buyer-email-${index}`} type="hidden" name="buyerEmail" value={email} />
+      ))}
+      {lines.map((line) => {
+        const effectiveAmount = invoiceLineEffectiveAmount(line);
+        return (
+          <span key={line.key} hidden>
+            <input type="hidden" name="lineVerticalId" value={line.verticalId} />
+            <input type="hidden" name="lineLeadCount" value={line.leadCount} />
+            <input type="hidden" name="lineRateType" value={line.rateType} />
+            <input type="hidden" name="lineRate" value={line.rate} />
+            <input type="hidden" name="lineAmount" value={String(effectiveAmount || "")} />
+            <input type="hidden" name="lineComments" value={line.comments} />
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function sanitizeDecimal(value: string, maxDecimals: number) {
   let next = value.replace(/[^\d.]/g, "");
   const dot = next.indexOf(".");
@@ -99,13 +138,7 @@ export function InvoiceLineRowsEditor({
   return (
     <Box sx={{ display: "grid", gap: 2 }}>
       {lines.map((line, index) => {
-        const count = Number(line.leadCount || 0);
-        const unit = Number(line.rate || 0);
-        const computed = DIRECT_TYPES.has(line.rateType)
-          ? Number(line.amount || 0)
-          : Math.round(count * unit * 100) / 100;
-        const effectiveAmount =
-          line.amountUnlocked || DIRECT_TYPES.has(line.rateType) ? Number(line.amount || 0) : computed;
+        const effectiveAmount = invoiceLineEffectiveAmount(line);
 
         return (
           <Box
@@ -145,7 +178,6 @@ export function InvoiceLineRowsEditor({
                   </option>
                 ))}
               </TextField>
-              <input type="hidden" name="lineVerticalId" value={line.verticalId} />
             </Box>
             <TextField
               size="small"
@@ -161,7 +193,6 @@ export function InvoiceLineRowsEditor({
               }
               slotProps={{ htmlInput: { inputMode: "numeric", maxLength: 10 } }}
             />
-            <input type="hidden" name="lineLeadCount" value={line.leadCount} />
             <TextField
               select
               size="small"
@@ -186,7 +217,6 @@ export function InvoiceLineRowsEditor({
                 </option>
               ))}
             </TextField>
-            <input type="hidden" name="lineRateType" value={line.rateType} />
             <TextField
               size="small"
               fullWidth
@@ -202,7 +232,6 @@ export function InvoiceLineRowsEditor({
               disabled={DIRECT_TYPES.has(line.rateType)}
               slotProps={{ htmlInput: { inputMode: "decimal", maxLength: 16 } }}
             />
-            <input type="hidden" name="lineRate" value={line.rate} />
             <TextField
               size="small"
               fullWidth
@@ -255,7 +284,6 @@ export function InvoiceLineRowsEditor({
                 },
               }}
             />
-            <input type="hidden" name="lineAmount" value={String(effectiveAmount || "")} />
             <Box sx={{ gridColumn: "1 / -1" }}>
               <TextField
                 size="small"
@@ -273,7 +301,6 @@ export function InvoiceLineRowsEditor({
                 minRows={2}
                 slotProps={{ htmlInput: { maxLength: 500 } }}
               />
-              <input type="hidden" name="lineComments" value={line.comments} />
             </Box>
             {lines.length > 1 ? (
               <Box sx={{ gridColumn: "1 / -1" }}>
@@ -305,9 +332,12 @@ export function InvoiceLineRowsEditor({
 export function BuyerEmailRowsEditor({
   emails,
   setEmails,
+  includeHiddenFields = true,
 }: {
   emails: string[];
   setEmails: React.Dispatch<React.SetStateAction<string[]>>;
+  /** Set false when a parent wizard mounts hidden fields for later steps. */
+  includeHiddenFields?: boolean;
 }) {
   return (
     <Box sx={{ display: "grid", gap: 1.5 }}>
@@ -327,7 +357,7 @@ export function BuyerEmailRowsEditor({
               setEmails((current) => current.map((row, rowIndex) => (rowIndex === index ? event.target.value : row)))
             }
           />
-          <input type="hidden" name="buyerEmail" value={email} />
+          {includeHiddenFields ? <input type="hidden" name="buyerEmail" value={email} /> : null}
           {emails.length > 1 ? (
             <Button
               type="button"

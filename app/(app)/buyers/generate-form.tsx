@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
@@ -12,6 +12,7 @@ import {
   BuyerEmailRowsEditor,
   createInvoiceLineDraft,
   InvoiceLineRowsEditor,
+  InvoiceWizardHiddenFields,
   type InvoiceLineDraft,
 } from "@/components/invoice-line-rows-editor";
 import { NetDaysSelect } from "@/components/forms";
@@ -32,6 +33,7 @@ type BuyerOption = {
 };
 
 const STEPS = ["Buyer", "Line items", "Dates", "Review"];
+const REVIEW_STEP = STEPS.length - 1;
 
 export function GenerateInvoiceForm({
   buyers,
@@ -61,6 +63,21 @@ export function GenerateInvoiceForm({
   const [periodEnd, setPeriodEnd] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [state, action] = useActionState(generateBuyerInvoice, {});
+  const [canSubmit, setCanSubmit] = useState(false);
+
+  const isReviewStep = step === REVIEW_STEP;
+
+  useEffect(() => {
+    if (!isReviewStep) {
+      setCanSubmit(false);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setCanSubmit(true));
+    return () => {
+      cancelAnimationFrame(frame);
+      setCanSubmit(false);
+    };
+  }, [isReviewStep]);
 
   const buyer = useMemo(() => buyers.find((row) => row.id === buyerId), [buyers, buyerId]);
   const netDaysDefault = buyer?.defaultPaymentTermsDays ?? defaultNetDays ?? 7;
@@ -112,13 +129,23 @@ export function GenerateInvoiceForm({
   const canNext =
     (step === 0 && Boolean(buyerId) && hasValidEmails) ||
     (step === 1 && hasValidLines) ||
-    step === 2 ||
-    step === 3;
+    step === 2;
+
+  function goToNextStep() {
+    if (step >= REVIEW_STEP) return;
+    setStep((current) => current + 1);
+  }
+
+  function handleFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (!isReviewStep) {
+      event.preventDefault();
+    }
+  }
 
   return (
     <MainCard title="Create invoice">
       <WizardSteps steps={STEPS} active={step} />
-      <Box component="form" action={action}>
+      <Box component="form" action={action} onSubmit={handleFormSubmit}>
         <input type="hidden" name="buyerId" value={buyerId} />
         <input type="hidden" name="invoiceNumber" value={invoiceNumber} />
         <input type="hidden" name="invoiceDate" value={invoiceDate} />
@@ -129,6 +156,7 @@ export function GenerateInvoiceForm({
         <input type="hidden" name="periodEnd" value={periodEnd} />
         <input type="hidden" name="dueDate" value={dueDate} />
         <input type="hidden" name="paymentTermsDays" value={netDays} />
+        <InvoiceWizardHiddenFields emails={emails} lines={lines} />
 
         {step === 0 ? (
           <Box sx={{ display: "grid", gap: 2, maxWidth: 560 }}>
@@ -167,7 +195,7 @@ export function GenerateInvoiceForm({
               ))}
             </TextField>
             <TextField size="small" fullWidth label="Contact name" value={contact} onChange={(e) => setContact(e.target.value)} />
-            <BuyerEmailRowsEditor emails={emails} setEmails={setEmails} />
+            <BuyerEmailRowsEditor emails={emails} setEmails={setEmails} includeHiddenFields={false} />
             <TextField
               size="small"
               fullWidth
@@ -264,7 +292,7 @@ export function GenerateInvoiceForm({
           </Box>
         ) : null}
 
-        {step === 3 ? (
+        {step === REVIEW_STEP ? (
           <Box sx={{ maxWidth: 560 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Check the details, then create the invoice.
@@ -293,18 +321,21 @@ export function GenerateInvoiceForm({
               Back
             </Button>
           ) : null}
-          {step < STEPS.length - 1 ? (
+          {step < REVIEW_STEP ? (
             <Button
               type="button"
               variant="contained"
               color="primary"
               disabled={!canNext}
-              onClick={() => setStep((s) => s + 1)}
+              onClick={(event) => {
+                event.preventDefault();
+                goToNextStep();
+              }}
             >
               Continue
             </Button>
           ) : (
-            <Button type="submit" variant="contained" color="primary" size="large">
+            <Button type="submit" variant="contained" color="primary" size="large" disabled={!canSubmit}>
               Create invoice
             </Button>
           )}
