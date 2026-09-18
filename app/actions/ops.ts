@@ -11,7 +11,9 @@ import { requireBrokerOps, requireSessionUser, requireTenant, requireTenantAdmin
 import { convertedAmount } from "@/lib/finance/partnerLedger";
 import { money } from "@/lib/finance/decimal";
 import { financeLockError, financeLockErrorForMonth } from "@/lib/finance/month-lock-context";
+import { monthBounds, monthPeriodFilter } from "@/lib/finance/period";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
+import { monthName } from "@/lib/utils";
 import { createCompanyForUser, updateCompanyIdentity } from "@/lib/company";
 import {
   addBuyerVerticalOffer,
@@ -1015,6 +1017,94 @@ export async function setFinanceMonthOverrideAction(
   revalidateFinance();
   revalidatePath("/settings");
   return {};
+}
+
+export async function deleteFinanceMonthHistoryAction(
+  _prev: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const ctx = await requireTenantAdmin();
+  const year = parseInteger(formField(formData, "year"), "Year", 2000, 2100, true);
+  if (!year.ok || year.value == null) return invalid("year", year.ok ? "Year is required." : year.error);
+  const month = parseInteger(formField(formData, "month"), "Month", 1, 12, true);
+  if (!month.ok || month.value == null) return invalid("month", month.ok ? "Month is required." : month.error);
+  const yearNum = year.value;
+  const monthNum = month.value;
+
+  const label = `${monthName(monthNum)} ${yearNum}`;
+  const confirm = formField(formData, "confirm").trim();
+  if (confirm.toLowerCase() !== label.toLowerCase()) {
+    return invalid("confirm", `Type ${label} to confirm deleting this month.`);
+  }
+
+  const settings = await prisma.financeSettings.findUnique({ where: { tenantId: ctx.tenantId } });
+  const fiscalDay = settings?.fiscalMonthStartDay ?? 1;
+  const { start, end } = monthBounds(yearNum, monthNum, fiscalDay);
+  const invoiceFilter = monthPeriodFilter(yearNum, monthNum, fiscalDay);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const buyerDeleted = await tx.buyerInvoice.deleteMany({
+      where: { tenantId: ctx.tenantId, AND: [invoiceFilter] },
+    });
+    const publisherDeleted = await tx.publisherInvoice.deleteMany({
+      where: { tenantId: ctx.tenantId, AND: [invoiceFilter] },
+    });
+    const buyerFigures = await tx.buyerDailyFigure.deleteMany({
+      where: { tenantId: ctx.tenantId, figureDate: { gte: start, lt: end } },
+    });
+    const publisherFigures = await tx.publisherDailyFigure.deleteMany({
+      where: { tenantId: ctx.tenantId, figureDate: { gte: start, lt: end } },
+    });
+    const expenses = await tx.expense.deleteMany({
+      where: { tenantId: ctx.tenantId, year: yearNum, month: monthNum },
+    });
+    const reconciliations = await tx.monthReconciliation.deleteMany({
+      where: { tenantId: ctx.tenantId, year: yearNum, month: monthNum },
+    });
+    const snapshots = await tx.monthlySnapshot.deleteMany({
+      where: { tenantId: ctx.tenantId, year: yearNum, month: monthNum },
+    });
+    const payouts = await tx.partnerPayout.deleteMany({
+      where: { tenantId: ctx.tenantId, year: yearNum, month: monthNum },
+    });
+    return {
+      buyerDeleted: buyerDeleted.count,
+      publisherDeleted: publisherDeleted.count,
+      buyerFigures: buyerFigures.count,
+      publisherFigures: publisherFigures.count,
+      expenses: expenses.count,
+      reconciliations: reconciliations.count,
+      snapshots: snapshots.count,
+      payouts: payouts.count,
+    };
+  });
+
+  revalidateFinance();
+  revalidatePath("/buyers");
+  revalidatePath("/publishers");
+  revalidatePath("/figures");
+  revalidatePath("/directory");
+  revalidatePath("/settings");
+
+  const parts = [
+    result.buyerDeleted ? `${result.buyerDeleted} buyer invoice${result.buyerDeleted === 1 ? "" : "s"}` : null,
+    result.publisherDeleted
+      ? `${result.publisherDeleted} publisher payable${result.publisherDeleted === 1 ? "" : "s"}`
+      : null,
+    result.buyerFigures + result.publisherFigures
+      ? `${result.buyerFigures + result.publisherFigures} daily figure${
+          result.buyerFigures + result.publisherFigures === 1 ? "" : "s"
+        }`
+      : null,
+    result.expenses ? `${result.expenses} expense${result.expenses === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+
+  return {
+    ok: true,
+    message: parts.length
+      ? `Deleted ${label}: ${parts.join(", ")}.`
+      : `No ledger rows found for ${label}.`,
+  };
 }
 
 const LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);

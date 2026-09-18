@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { InvoiceStatus, PaidApprovalStatus, PaymentStatus, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireTenant, canApprovePayments, canWrite } from "@/lib/tenant";
+import { requireTenant, requireTenantAdmin, canApprovePayments, canWrite } from "@/lib/tenant";
+import type { FormActionState } from "@/lib/form-state";
 import { dueDate, formatNetTerms, lineTotal, parsePaymentTermsDays } from "@/lib/finance/invoice";
 import { invoiceVariance } from "@/lib/finance/variance";
 import { getFinanceSettings } from "@/lib/finance/queries";
@@ -202,6 +203,44 @@ export async function deleteBuyerInvoice(
   await prisma.buyerInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateLedgers();
   redirect("/buyers");
+}
+
+export async function bulkDeleteBuyerInvoices(
+  _prev: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const ctx = await requireTenantAdmin();
+  const ids = [...new Set(formData.getAll("id").map((value) => String(value).trim()).filter(Boolean))];
+  if (ids.length === 0) return { error: "Select at least one invoice to delete." };
+
+  const invoices = await prisma.buyerInvoice.findMany({
+    where: { tenantId: ctx.tenantId, id: { in: ids } },
+    select: { id: true, periodStart: true, periodEnd: true, dueDate: true, invoiceDate: true },
+  });
+  if (invoices.length === 0) return { error: "No matching invoices found." };
+
+  for (const invoice of invoices) {
+    const closed = await invoiceLockError(
+      ctx,
+      invoice.periodStart,
+      invoice.periodEnd,
+      invoice.dueDate,
+      invoice.invoiceDate,
+    );
+    if (closed) return { error: closed };
+  }
+
+  await prisma.buyerInvoice.deleteMany({
+    where: { tenantId: ctx.tenantId, id: { in: invoices.map((row) => row.id) } },
+  });
+  revalidateLedgers();
+  return {
+    ok: true,
+    message:
+      invoices.length === 1
+        ? "Deleted 1 invoice."
+        : `Deleted ${invoices.length} invoices.`,
+  };
 }
 
 export async function markBuyerPaid(formData: FormData) {
@@ -495,6 +534,44 @@ export async function deletePublisherInvoice(
   await prisma.publisherInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
   revalidateLedgers();
   redirect("/publishers");
+}
+
+export async function bulkDeletePublisherInvoices(
+  _prev: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const ctx = await requireTenantAdmin();
+  const ids = [...new Set(formData.getAll("id").map((value) => String(value).trim()).filter(Boolean))];
+  if (ids.length === 0) return { error: "Select at least one payable to delete." };
+
+  const invoices = await prisma.publisherInvoice.findMany({
+    where: { tenantId: ctx.tenantId, id: { in: ids } },
+    select: { id: true, periodStart: true, periodEnd: true, dueDate: true, invoiceDate: true },
+  });
+  if (invoices.length === 0) return { error: "No matching payables found." };
+
+  for (const invoice of invoices) {
+    const closed = await invoiceLockError(
+      ctx,
+      invoice.periodStart,
+      invoice.periodEnd,
+      invoice.dueDate,
+      invoice.invoiceDate,
+    );
+    if (closed) return { error: closed };
+  }
+
+  await prisma.publisherInvoice.deleteMany({
+    where: { tenantId: ctx.tenantId, id: { in: invoices.map((row) => row.id) } },
+  });
+  revalidateLedgers();
+  return {
+    ok: true,
+    message:
+      invoices.length === 1
+        ? "Deleted 1 payable."
+        : `Deleted ${invoices.length} payables.`,
+  };
 }
 
 export async function markPublisherPaid(formData: FormData) {

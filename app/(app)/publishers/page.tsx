@@ -17,6 +17,7 @@ import {
   canWrite,
   isBuyerPortal,
   isPublisherPortal,
+  isTenantAdmin,
   requireTenant,
   scopedPublisherFilter,
 } from "@/lib/tenant";
@@ -46,6 +47,7 @@ export default async function PublishersPage({
   const dateFilter = year && month ? monthPeriodFilter(year, month, settings.fiscalMonthStartDay) : {};
   const approver = canApprovePayments(ctx.tenantRole, ctx.platformRole);
   const writer = canWrite(ctx.tenantRole, ctx.platformRole);
+  const admin = isTenantAdmin(ctx.tenantRole, ctx.platformRole);
 
   const where = {
     tenantId: ctx.tenantId,
@@ -194,6 +196,7 @@ export default async function PublishersPage({
         canApprove={approver}
         canManage={writer}
         isPortal={portal}
+        canBulkDelete={admin && !portal}
       />
       <Pagination page={page} pageCount={pageCount} basePath="/publishers" query={paginationQuery} />
     </Box>

@@ -14,10 +14,15 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { PaymentStatus } from "@prisma/client";
-import { markBuyerPaid } from "@/app/actions/invoices";
+import { bulkDeleteBuyerInvoices, markBuyerPaid } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
 import { DetailDrawer } from "@/components/shared/detail-drawer";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  InvoiceBulkDeleteBar,
+  InvoiceSelectCheckbox,
+  useInvoiceSelection,
+} from "@/components/shared/invoice-bulk-delete";
 import { StatusPill } from "@/components/shared/status-pill";
 import { SendInvoiceButton } from "@/components/smtp-form";
 import { displayDate } from "@/lib/dates";
@@ -57,15 +62,19 @@ export function BuyerInvoicesView({
   totals,
   mailboxes = [],
   canManage = true,
+  canBulkDelete = false,
 }: {
   rows: BuyerInvoiceRow[];
   totals: { receivable: number; received: number };
   mailboxes?: SmtpMailboxPublic[];
   canManage?: boolean;
+  canBulkDelete?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? null, [rows, selectedId]);
   const close = useCallback(() => setSelectedId(null), []);
+  const rowIds = useMemo(() => rows.map((row) => row.id), [rows]);
+  const selection = useInvoiceSelection(rowIds);
 
   if (rows.length === 0) {
     return (
@@ -85,11 +94,29 @@ export function BuyerInvoicesView({
   return (
     <>
       <MainCard content={false} title="Invoices">
-        {/* Desktop table */}
+        {canBulkDelete ? (
+          <InvoiceBulkDeleteBar
+            selectedIds={selection.selectedIds}
+            action={bulkDeleteBuyerInvoices}
+            noun="invoice"
+            onCleared={selection.clear}
+          />
+        ) : null}
+
         <TableContainer sx={{ display: { xs: "none", md: "block" } }}>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
+                {canBulkDelete ? (
+                  <TableCell padding="checkbox" sx={{ width: 48 }}>
+                    <InvoiceSelectCheckbox
+                      checked={selection.allSelected}
+                      indeterminate={selection.someSelected}
+                      onChange={selection.toggleAll}
+                      label="Select all invoices on this page"
+                    />
+                  </TableCell>
+                ) : null}
                 <TableCell>Buyer</TableCell>
                 <TableCell>Invoice</TableCell>
                 <TableCell>Due</TableCell>
@@ -103,6 +130,7 @@ export function BuyerInvoicesView({
                 <TableRow
                   key={row.id}
                   hover
+                  selected={canBulkDelete && selection.selectedIds.includes(row.id)}
                   tabIndex={0}
                   onClick={() => setSelectedId(row.id)}
                   onKeyDown={(event) => {
@@ -113,6 +141,15 @@ export function BuyerInvoicesView({
                   }}
                   sx={{ cursor: "pointer" }}
                 >
+                  {canBulkDelete ? (
+                    <TableCell padding="checkbox">
+                      <InvoiceSelectCheckbox
+                        checked={selection.selectedIds.includes(row.id)}
+                        onChange={() => selection.toggleOne(row.id)}
+                        label={`Select invoice ${row.invoiceNumber || row.id}`}
+                      />
+                    </TableCell>
+                  ) : null}
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
                       {row.buyerName}
@@ -139,7 +176,7 @@ export function BuyerInvoicesView({
                 </TableRow>
               ))}
               <TableRow sx={{ bgcolor: "var(--fr-surface-muted)" }}>
-                <TableCell colSpan={3}>
+                <TableCell colSpan={canBulkDelete ? 4 : 3}>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>
                     Totals
                   </Typography>
@@ -156,42 +193,53 @@ export function BuyerInvoicesView({
           </Table>
         </TableContainer>
 
-        {/* Mobile cards */}
-        <Stack spacing={0} sx={{ display: { xs: "flex", md: "none" }, divideY: 1 }}>
+        <Stack spacing={0} sx={{ display: { xs: "flex", md: "none" } }}>
           {rows.map((row) => (
             <Box
               key={row.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => setSelectedId(row.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setSelectedId(row.id);
-                }
-              }}
               sx={{
                 px: 2,
                 py: 2,
                 borderBottom: "1px solid",
                 borderColor: "divider",
-                cursor: "pointer",
-                "&:hover": { bgcolor: "action.hover" },
+                bgcolor: canBulkDelete && selection.selectedIds.includes(row.id) ? "action.selected" : undefined,
               }}
             >
-              <Stack direction="row" sx={{ justifyContent: "space-between", gap: 2, mb: 0.75 }}>
-                <Typography sx={{ fontWeight: 600 }}>{row.buyerName}</Typography>
-                <Typography className="fr-money" sx={{ fontWeight: 700 }}>
-                  {formatMoney(row.receivable)}
-                </Typography>
-              </Stack>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                {row.invoiceNumber || "Draft"} · due {displayDate(row.dueDate)}
-              </Typography>
-              <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                <StatusPill paymentStatus={row.paymentStatus} />
-                {row.isDraft ? <StatusPill kind="draft" /> : null}
-                {row.overdue ? <StatusPill kind="overdue" /> : null}
+              <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
+                {canBulkDelete ? (
+                  <InvoiceSelectCheckbox
+                    checked={selection.selectedIds.includes(row.id)}
+                    onChange={() => selection.toggleOne(row.id)}
+                    label={`Select invoice ${row.invoiceNumber || row.id}`}
+                  />
+                ) : null}
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedId(row.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedId(row.id);
+                    }
+                  }}
+                  sx={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                >
+                  <Stack direction="row" sx={{ justifyContent: "space-between", gap: 2, mb: 0.75 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{row.buyerName}</Typography>
+                    <Typography className="fr-money" sx={{ fontWeight: 700 }}>
+                      {formatMoney(row.receivable)}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    {row.invoiceNumber || "Draft"} · due {displayDate(row.dueDate)}
+                  </Typography>
+                  <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                    <StatusPill paymentStatus={row.paymentStatus} />
+                    {row.isDraft ? <StatusPill kind="draft" /> : null}
+                    {row.overdue ? <StatusPill kind="overdue" /> : null}
+                  </Stack>
+                </Box>
               </Stack>
             </Box>
           ))}

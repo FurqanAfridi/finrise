@@ -21,6 +21,7 @@ import {
   canWrite,
   isBuyerPortal,
   isPublisherPortal,
+  isTenantAdmin,
   requireTenant,
   scopedBuyerFilter,
 } from "@/lib/tenant";
@@ -47,6 +48,7 @@ export default async function BuyersPage({
   const year = params.year ? Number(params.year) : undefined;
   const month = params.month ? Number(params.month) : undefined;
   const writer = canWrite(ctx.tenantRole, ctx.platformRole);
+  const admin = isTenantAdmin(ctx.tenantRole, ctx.platformRole);
 
   const dateFilter = year && month ? monthPeriodFilter(year, month, settings.fiscalMonthStartDay) : {};
 
@@ -243,6 +245,7 @@ export default async function BuyersPage({
         }}
         mailboxes={mailboxes}
         canManage={writer}
+        canBulkDelete={admin && !portal}
       />
       <Pagination page={page} pageCount={pageCount} basePath="/buyers" query={paginationQuery} />
     </Box>
