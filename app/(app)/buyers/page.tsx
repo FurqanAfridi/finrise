@@ -11,7 +11,7 @@ import { Pagination } from "@/components/pagination";
 import { listBuyerEmailsByBuyerIds } from "@/lib/buyer-emails";
 import { invoiceVerticalLabel } from "@/lib/invoice-lines";
 import { formatMoney } from "@/lib/money";
-import { monthPeriodFilter } from "@/lib/finance/period";
+import { listPeriodFilter, periodChipLabel, yearSpan } from "@/lib/finance/period";
 import { invoiceVariance, isOverdue } from "@/lib/finance/variance";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { prisma } from "@/lib/prisma";
@@ -50,7 +50,19 @@ export default async function BuyersPage({
   const writer = canWrite(ctx.tenantRole, ctx.platformRole);
   const admin = isTenantAdmin(ctx.tenantRole, ctx.platformRole);
 
-  const dateFilter = year && month ? monthPeriodFilter(year, month, settings.fiscalMonthStartDay) : {};
+  const dateRange =
+    month && !year
+      ? await prisma.buyerInvoice.aggregate({
+          where: { tenantId: ctx.tenantId },
+          _min: { periodStart: true, dueDate: true },
+          _max: { periodStart: true, dueDate: true },
+        })
+      : null;
+  const dataYears = dateRange
+    ? yearSpan(dateRange._min.periodStart, dateRange._min.dueDate, dateRange._max.periodStart, dateRange._max.dueDate)
+    : [];
+  const dateFilter = listPeriodFilter(year, month, dataYears, settings.fiscalMonthStartDay);
+  const periodChip = periodChipLabel(year, month);
 
   const where = {
     tenantId: ctx.tenantId,
@@ -67,7 +79,7 @@ export default async function BuyersPage({
         : {},
       status ? { paymentStatus: status } : {},
       buyerId ? { buyerId } : {},
-      verticalId ? { verticalId } : {},
+      verticalId ? { OR: [{ verticalId }, { lines: { some: { verticalId } } }] } : {},
     ],
   };
 
@@ -135,7 +147,7 @@ export default async function BuyersPage({
       ? { key: "vertical", label: `Vertical: ${verticals.find((v) => v.id === verticalId)?.name ?? "Selected"}` }
       : null,
     status ? { key: "status", label: `Status: ${PAYMENT_STATUS_LABEL[status]}` } : null,
-    year && month ? { key: "year", label: `Period: ${month}/${year}` } : null,
+    periodChip ? { key: year ? "year" : "month", label: periodChip } : null,
   ].filter(Boolean) as { key: string; label: string }[];
 
   const listRows = rows.map((row) => {

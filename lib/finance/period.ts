@@ -26,6 +26,46 @@ export function monthPeriodFilter(year: number, month: number, fiscalMonthStartD
   return periodFilter(start, end);
 }
 
+/**
+ * Date filter for invoice lists. Year + month picks one month, year alone picks the whole year,
+ * and month alone picks that month in every year listed in `yearsWithData`.
+ */
+export function listPeriodFilter(
+  year: number | undefined,
+  month: number | undefined,
+  yearsWithData: number[],
+  fiscalMonthStartDay = 1,
+) {
+  if (year && month) return monthPeriodFilter(year, month, fiscalMonthStartDay);
+  if (year) {
+    return periodFilter(
+      monthBounds(year, 1, fiscalMonthStartDay).start,
+      monthBounds(year + 1, 1, fiscalMonthStartDay).start,
+    );
+  }
+  if (month) return { OR: yearsWithData.map((y) => monthPeriodFilter(y, month, fiscalMonthStartDay)) };
+  return {};
+}
+
+/** Every year from the year before the earliest date through the latest (covers fiscal months that start late). */
+export function yearSpan(...dates: (Date | null | undefined)[]): number[] {
+  const years = dates.filter((date): date is Date => date instanceof Date).map((date) => date.getUTCFullYear());
+  if (years.length === 0) return [];
+  const span: number[] = [];
+  for (let y = Math.min(...years) - 1; y <= Math.max(...years); y += 1) span.push(y);
+  return span;
+}
+
+export function periodChipLabel(year: number | undefined, month: number | undefined): string | null {
+  const monthName = month
+    ? new Date(Date.UTC(2000, month - 1, 1)).toLocaleString("en-US", { month: "long", timeZone: "UTC" })
+    : null;
+  if (year && monthName) return `Period: ${monthName} ${year}`;
+  if (year) return `Year: ${year}`;
+  if (monthName) return `Month: ${monthName} (all years)`;
+  return null;
+}
+
 /** ISO week bounds (Mon–Sun UTC). week is 1–53. */
 export function weekBounds(year: number, week: number): { start: Date; end: Date } {
   const jan4 = new Date(Date.UTC(year, 0, 4));

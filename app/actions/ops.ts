@@ -12,6 +12,7 @@ import { convertedAmount } from "@/lib/finance/partnerLedger";
 import { money } from "@/lib/finance/decimal";
 import { financeLockError, financeLockErrorForMonth } from "@/lib/finance/month-lock-context";
 import { monthBounds, monthPeriodFilter } from "@/lib/finance/period";
+import { OPENING_BALANCE_DATE_KEY, OPENING_BALANCE_KEY } from "@/lib/finance/queries";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { monthName } from "@/lib/utils";
 import { createCompanyForUser, updateCompanyIdentity } from "@/lib/company";
@@ -1551,6 +1552,27 @@ export async function upsertBankAccount(formData: FormData) {
   });
   revalidatePath("/treasury");
   revalidatePath("/dashboard");
+}
+
+/** Cash on hand when the company started tracking here. Movements before the date are not counted again. */
+export async function saveCashOpeningBalance(formData: FormData) {
+  const ctx = await requireTenantAdmin();
+  const amount = dec(formData, "openingBalance") ?? 0;
+  const date = str(formData, "openingDate");
+  if (hasInvalidNumber(amount)) return;
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const values = [
+    { key: OPENING_BALANCE_KEY, value: String(amount) },
+    { key: OPENING_BALANCE_DATE_KEY, value: date ?? "" },
+  ];
+  for (const row of values) {
+    await prisma.setting.upsert({
+      where: { tenantId_key: { tenantId: ctx.tenantId, key: row.key } },
+      update: { value: row.value },
+      create: { tenantId: ctx.tenantId, ...row },
+    });
+  }
+  revalidatePath("/balance");
 }
 
 export async function upsertMonthReconciliation(formData: FormData) {

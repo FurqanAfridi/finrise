@@ -21,6 +21,14 @@ export function lineTotal(
   return computed;
 }
 
+/**
+ * Amount to record on a bill marked Paid: the amount entered when it is above zero,
+ * otherwise the full amount owed (an empty or 0 amount means nobody typed one).
+ */
+export function settledAmount(entered: number | null | undefined, owed: number): number {
+  return entered != null && Number.isFinite(entered) && entered > 0 ? entered : owed;
+}
+
 export function dueDate(invoiceDate: Date, paymentTermsDays: number): Date {
   const days = Number.isFinite(paymentTermsDays) ? Math.max(0, Math.trunc(paymentTermsDays)) : 0;
   const result = new Date(invoiceDate.getTime());

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cents, money } from "../decimal";
-import { lineTotal } from "../invoice";
+import { lineTotal, settledAmount } from "../invoice";
 import { computeMonthlyOverview } from "../monthlyOverview";
 import { partnerLedger } from "../partnerLedger";
 import { distributeProfit } from "../profitDistribution";
@@ -113,5 +113,19 @@ describe("partner ledger", () => {
     });
     const rafia = rows.find((row) => row.partnerId === "rafia");
     expect(rafia?.availableBalance.toFixed(2)).toBe("-1103.36");
+  });
+});
+
+describe("settledAmount", () => {
+  it("uses the full amount when nothing or 0 was entered", () => {
+    expect(settledAmount(null, 912)).toBe(912);
+    expect(settledAmount(undefined, 912)).toBe(912);
+    expect(settledAmount(0, 912)).toBe(912);
+    expect(settledAmount(Number.NaN, 912)).toBe(912);
+  });
+
+  it("keeps an amount someone typed, including a part payment", () => {
+    expect(settledAmount(500, 912)).toBe(500);
+    expect(settledAmount(950, 912)).toBe(950);
   });
 });

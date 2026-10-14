@@ -5,6 +5,7 @@ import { computeMonthlyOverview } from "@/lib/finance/monthlyOverview";
 import { monthBounds, periodFilter, yearMonthsInRange } from "@/lib/finance/period";
 import { tryDistributeProfit } from "@/lib/finance/profitDistribution";
 import type { FinanceSettingsInput, MonthlyOverview, PartnerInput } from "@/lib/finance/types";
+import type { CashLedgerEntry } from "@/lib/finance/cash-ledger";
 
 function d(value: Prisma.Decimal | number | null | undefined) {
   return cents(value?.toString() ?? 0);
@@ -311,4 +312,110 @@ export async function overallProfit(tenantId: string) {
     totalWithdrawn,
     totalRemaining: cents(totalSavings.sub(totalWithdrawn)),
   };
+}
+
+export const OPENING_BALANCE_KEY = "cashOpeningBalance";
+export const OPENING_BALANCE_DATE_KEY = "cashOpeningBalanceDate";
+
+export async function getCashOpening(tenantId: string) {
+  const rows = await prisma.setting.findMany({
+    where: { tenantId, key: { in: [OPENING_BALANCE_KEY, OPENING_BALANCE_DATE_KEY] } },
+  });
+  const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  const date = byKey[OPENING_BALANCE_DATE_KEY] ? new Date(`${byKey[OPENING_BALANCE_DATE_KEY]}T00:00:00Z`) : null;
+  return {
+    opening: cents(byKey[OPENING_BALANCE_KEY] ?? 0),
+    openingDate: date && !Number.isNaN(date.getTime()) ? date : null,
+  };
+}
+
+/**
+ * Every cash movement for the company: buyer money received, approved publisher payments,
+ * paid expenses, and partner withdrawals. Draft bills count once money has moved on them, as in Reports.
+ * Publisher payments still waiting for approval are left out.
+ */
+export async function loadCashLedgerEntries(tenantId: string): Promise<CashLedgerEntry[]> {
+  const [buyerInvoices, publisherInvoices, expenses, withdrawals] = await Promise.all([
+    prisma.buyerInvoice.findMany({
+      where: { tenantId, received: { gt: 0 } },
+      select: {
+        id: true,
+        received: true,
+        paidAt: true,
+        dueDate: true,
+        periodEnd: true,
+        updatedAt: true,
+        invoiceNumber: true,
+        periodLabel: true,
+        paymentMethod: true,
+        buyer: { select: { name: true } },
+      },
+    }),
+    prisma.publisherInvoice.findMany({
+      where: {
+        tenantId,
+        paid: { gt: 0 },
+        paidApprovalStatus: { in: ["APPROVED", "NOT_REQUIRED"] },
+      },
+      select: {
+        id: true,
+        paid: true,
+        paidAt: true,
+        dueDate: true,
+        periodEnd: true,
+        updatedAt: true,
+        invoiceNumber: true,
+        periodLabel: true,
+        paymentMethod: true,
+        publisher: { select: { name: true } },
+      },
+    }),
+    prisma.expense.findMany({
+      where: { tenantId, paid: { gt: 0 } },
+      select: { id: true, paid: true, paidAt: true, year: true, month: true, label: true, category: true, method: true },
+    }),
+    prisma.partnerWithdrawal.findMany({
+      where: { tenantId },
+      select: { id: true, amountBase: true, date: true, method: true, note: true, partner: { select: { name: true } } },
+    }),
+  ]);
+
+  return [
+    ...buyerInvoices.map((row) => ({
+      id: `b:${row.id}`,
+      date: row.paidAt ?? row.dueDate ?? row.periodEnd ?? row.updatedAt,
+      kind: "BUYER_PAYMENT" as const,
+      description: `${row.buyer.name}${row.periodLabel ? ` · ${row.periodLabel}` : ""}`,
+      reference: [row.invoiceNumber, row.paymentMethod].filter(Boolean).join(" · ") || null,
+      amount: d(row.received),
+      href: `/buyers/${row.id}`,
+    })),
+    ...publisherInvoices.map((row) => ({
+      id: `p:${row.id}`,
+      date: row.paidAt ?? row.dueDate ?? row.periodEnd ?? row.updatedAt,
+      kind: "PUBLISHER_PAYMENT" as const,
+      description: `${row.publisher.name}${row.periodLabel ? ` · ${row.periodLabel}` : ""}`,
+      reference: [row.invoiceNumber, row.paymentMethod].filter(Boolean).join(" · ") || null,
+      amount: d(row.paid).neg(),
+      href: `/publishers/${row.id}`,
+    })),
+    ...expenses.map((row) => ({
+      id: `e:${row.id}`,
+      date: row.paidAt ?? new Date(Date.UTC(row.year, row.month - 1, 1)),
+      kind: "EXPENSE" as const,
+      description: row.label ? `${row.category} · ${row.label}` : row.category,
+      reference: row.method,
+      amount: d(row.paid).neg(),
+      href: `/expenses?year=${row.year}&month=${row.month}`,
+    })),
+    ...withdrawals.map((row) => ({
+      id: `w:${row.id}`,
+      date: row.date,
+      kind: "PARTNER_WITHDRAWAL" as const,
+      description: `${row.partner.name}${row.note ? ` · ${row.note}` : ""}`,
+      reference: row.method,
+      amount: d(row.amountBase).neg(),
+      href: "/partners",
+    })),
+  ];
 }

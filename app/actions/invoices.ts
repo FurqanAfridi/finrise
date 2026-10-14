@@ -6,7 +6,7 @@ import { InvoiceStatus, PaidApprovalStatus, PaymentStatus, RateType } from "@pri
 import { prisma } from "@/lib/prisma";
 import { requireTenant, requireTenantAdmin, canApprovePayments, canWrite } from "@/lib/tenant";
 import type { FormActionState } from "@/lib/form-state";
-import { dueDate, formatNetTerms, lineTotal, parsePaymentTermsDays } from "@/lib/finance/invoice";
+import { dueDate, formatNetTerms, lineTotal, parsePaymentTermsDays, settledAmount } from "@/lib/finance/invoice";
 import { invoiceVariance } from "@/lib/finance/variance";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
@@ -139,6 +139,9 @@ export async function upsertBuyerInvoice(
   );
   if (closed) return { error: closed };
 
+  const paymentStatus = enumValue(str(formData, "paymentStatus"), Object.values(PaymentStatus), PaymentStatus.UNPAID);
+  const isPaid = paymentStatus === PaymentStatus.PAID;
+
   const data = {
     tenantId: ctx.tenantId,
     buyerId,
@@ -157,12 +160,12 @@ export async function upsertBuyerInvoice(
     invoiceNumber: str(formData, "invoiceNumber"),
     terms,
     paymentTermsDays,
-    paymentStatus: enumValue(str(formData, "paymentStatus"), Object.values(PaymentStatus), PaymentStatus.UNPAID),
+    paymentStatus,
     invoiceStatus: enumValue(str(formData, "invoiceStatus"), Object.values(InvoiceStatus), InvoiceStatus.NOT_SENT),
     receivable,
-    received,
+    received: isPaid ? settledAmount(received, receivable) : received,
     bankCredit,
-    paidAt: date(formData, "paidAt"),
+    paidAt: date(formData, "paidAt") ?? (isPaid ? (existing?.paidAt ?? new Date()) : null),
     paymentMethod: str(formData, "paymentMethod"),
     comments: summary.comments ?? str(formData, "comments"),
   };
@@ -251,7 +254,10 @@ export async function markBuyerPaid(formData: FormData) {
   if (!invoice) return;
   const closed = await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate);
   if (closed) return;
-  const received = dec(formData, "received") ?? Number(invoice.received ?? invoice.receivable);
+  const received = settledAmount(
+    dec(formData, "received") ?? (invoice.received == null ? null : Number(invoice.received)),
+    Number(invoice.receivable),
+  );
   await prisma.buyerInvoice.update({
     where: { id },
     data: {
@@ -493,7 +499,10 @@ export async function upsertPublisherInvoice(
     terms,
     paymentTermsDays,
     payable,
-    paid: paidInput ?? (markedPaid ? payable : previous?.paid ? Number(previous.paid) : null),
+    paid:
+      paymentStatus === PaymentStatus.PAID
+        ? settledAmount(paidInput ?? (previous?.paid ? Number(previous.paid) : null), payable)
+        : (paidInput ?? (previous?.paid ? Number(previous.paid) : null)),
     transactionAmount,
     paidAt: date(formData, "paidAt") ?? (markedPaid ? new Date() : previous?.paidAt ?? null),
     paymentMethod: str(formData, "paymentMethod"),
@@ -584,7 +593,10 @@ export async function markPublisherPaid(formData: FormData) {
   });
   if (!invoice) return;
   if (await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
-  const paid = dec(formData, "paid") ?? Number(invoice.paid ?? invoice.payable);
+  const paid = settledAmount(
+    dec(formData, "paid") ?? (invoice.paid == null ? null : Number(invoice.paid)),
+    Number(invoice.payable),
+  );
   await prisma.publisherInvoice.update({
     where: { id },
     data: {
