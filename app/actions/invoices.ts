@@ -127,7 +127,6 @@ export async function upsertBuyerInvoice(
     : null;
   if (id && !existing) return { error: "Invoice not found." };
 
-  const verticalId = str(formData, "verticalId");
   const lineRows = parseInvoiceLineRowsFromForm(formData);
   if (!lineRows.ok) return { error: lineRows.error };
   const summary = summarizeInvoiceLines(lineRows.value);
@@ -213,6 +212,25 @@ export async function upsertBuyerInvoice(
     comments: summary.comments ?? str(formData, "comments"),
   };
 
+  const verticalNames = async (ids: (string | null)[]) => {
+    const named = await prisma.vertical.findMany({
+      where: { tenantId: ctx.tenantId, id: { in: ids.filter((value): value is string => Boolean(value)) } },
+      select: { id: true, name: true },
+    });
+    return ids.map((value) => named.find((row) => row.id === value)?.name ?? "None").join(", ");
+  };
+  const verticalsBefore = existing
+    ? await verticalNames(
+        (
+          await prisma.buyerInvoiceLine.findMany({
+            where: { tenantId: ctx.tenantId, buyerInvoiceId: existing.id },
+            orderBy: { sortOrder: "asc" },
+            select: { verticalId: true },
+          })
+        ).map((line) => line.verticalId),
+      )
+    : "";
+
   const saved = id
     ? await prisma.buyerInvoice.update({ where: { id }, data })
     : await prisma.buyerInvoice.create({ data: { ...data, createdById: ctx.userId } });
@@ -222,7 +240,15 @@ export async function upsertBuyerInvoice(
     existing && existing.buyerId !== buyerId
       ? ((await prisma.buyer.findUnique({ where: { id: existing.buyerId }, select: { name: true } }))?.name ?? "")
       : buyer.name;
-  const changes = existing ? buyerChanges(existing, saved, { before: previousBuyerName, after: buyer.name }) : null;
+  const verticalsAfter = await verticalNames(lineRows.value.map((line) => line.verticalId));
+  const changes = existing
+    ? [
+        describeChanges([{ label: "Verticals", before: verticalsBefore, after: verticalsAfter }]),
+        buyerChanges(existing, saved, { before: previousBuyerName, after: buyer.name }),
+      ]
+        .filter(Boolean)
+        .join("; ") || null
+    : null;
   if (!existing || changes) {
     await logInvoiceActivity({
       tenantId: ctx.tenantId,

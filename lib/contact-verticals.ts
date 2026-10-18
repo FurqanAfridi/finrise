@@ -43,6 +43,29 @@ export async function listBuyerVerticalOffers(tenantId: string, buyerId: string)
   })) satisfies ContactVerticalOffer[];
 }
 
+/** Vertical rates for many buyers in one query, keyed by buyer id. */
+export async function listBuyerVerticalOffersByBuyer(tenantId: string, buyerIds: string[]) {
+  const rows = await prisma.buyerVertical.findMany({
+    where: { tenantId, buyerId: { in: buyerIds } },
+    include: { vertical: { select: { name: true } } },
+    orderBy: { vertical: { name: "asc" } },
+  });
+  const byBuyer: Record<string, ContactVerticalOffer[]> = Object.fromEntries(buyerIds.map((id) => [id, []]));
+  for (const row of rows) {
+    byBuyer[row.buyerId]?.push({
+      id: row.id,
+      verticalId: row.verticalId,
+      verticalName: row.vertical.name,
+      paymentTermsDays: row.paymentTermsDays,
+      terms: row.terms,
+      rate: row.rate?.toString() ?? null,
+      rateType: row.rateType,
+      rateLabel: row.rateLabel,
+    });
+  }
+  return byBuyer;
+}
+
 export async function listPublisherVerticalOffers(tenantId: string, publisherId: string) {
   const rows = await prisma.publisherVertical.findMany({
     where: { tenantId, publisherId },

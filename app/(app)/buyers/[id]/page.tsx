@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
 import { getDirectoryOptions } from "@/lib/queries";
 import { withPlainNumbers } from "@/lib/serialize";
+import { listBuyerVerticalOffersByBuyer } from "@/lib/contact-verticals";
 import {
   assertBuyerInvoiceAccess,
   canWrite,
@@ -26,11 +27,27 @@ export default async function EditBuyerInvoicePage({
     redirect(`/invoices/${invoice.id}`);
   }
 
-  const options = await getDirectoryOptions(ctx.tenantId);
+  const [options, lines] = await Promise.all([
+    getDirectoryOptions(ctx.tenantId),
+    prisma.buyerInvoiceLine.findMany({
+      where: { tenantId: ctx.tenantId, buyerInvoiceId: invoice.id },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
+  const buyerVerticalOffers = await listBuyerVerticalOffersByBuyer(
+    ctx.tenantId,
+    options.buyers.map((buyer) => buyer.id),
+  );
   return (
     <div>
       <PageHeader title="Edit buyer invoice" description={invoice.invoiceNumber ?? invoice.periodLabel ?? ""} />
-      <BuyerInvoiceForm invoice={withPlainNumbers(invoice)} buyers={options.buyers} verticals={options.verticals} />
+      <BuyerInvoiceForm
+        invoice={withPlainNumbers(invoice)}
+        lines={lines.map(withPlainNumbers)}
+        buyers={options.buyers}
+        verticals={options.verticals}
+        buyerVerticalOffers={buyerVerticalOffers}
+      />
     </div>
   );
 }

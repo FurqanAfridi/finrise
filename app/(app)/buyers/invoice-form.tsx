@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -10,7 +10,13 @@ import { InvoiceStatus, PaymentStatus, RateType } from "@prisma/client";
 import { deleteBuyerInvoice, upsertBuyerInvoice } from "@/app/actions/invoices";
 import { MainCard } from "@/components/berry/main-card";
 import { InvoiceStatusSelect, NativeSelect, NetDaysSelect, PaymentStatusSelect, TextInput } from "@/components/forms";
-import { InvoiceLineFields } from "@/components/invoice-line-fields";
+import {
+  createInvoiceLineDraft,
+  InvoiceLineRowsEditor,
+  InvoiceWizardHiddenFields,
+  type InvoiceLineDraft,
+} from "@/components/invoice-line-rows-editor";
+import type { ContactVerticalOffer } from "@/lib/contact-verticals";
 import { isoDate } from "@/lib/dates";
 import { num } from "@/lib/utils";
 
@@ -40,15 +46,62 @@ type Invoice = {
   comments?: string | null;
 };
 
+type SavedLine = {
+  verticalId: string | null;
+  leadCount: number | null;
+  rateType: RateType;
+  rate: number | null;
+  amount: number;
+  comments: string | null;
+};
+
+function toDraft(line: SavedLine): InvoiceLineDraft {
+  const computed = line.leadCount != null && line.rate != null ? Math.round(line.leadCount * line.rate * 100) / 100 : null;
+  return {
+    ...createInvoiceLineDraft(line.verticalId ?? ""),
+    leadCount: line.leadCount == null ? "" : String(line.leadCount),
+    rateType: line.rateType,
+    rate: line.rate == null ? "" : String(line.rate),
+    amount: line.amount.toFixed(2),
+    // Keep a typed-in amount that does not match quantity × rate.
+    amountUnlocked: computed == null || computed !== line.amount,
+    comments: line.comments ?? "",
+  };
+}
+
+/** Saved lines, or one line built from an older single-vertical invoice. */
+function initialLines(invoice: Invoice | undefined, lines: SavedLine[]): InvoiceLineDraft[] {
+  if (lines.length > 0) return lines.map(toDraft);
+  if (!invoice?.id) return [createInvoiceLineDraft()];
+  return [
+    toDraft({
+      verticalId: invoice.verticalId ?? null,
+      leadCount: invoice.leadCount == null ? null : num(invoice.leadCount),
+      rateType: invoice.rateType ?? RateType.CPL,
+      rate: invoice.rate == null ? null : num(invoice.rate),
+      amount: num(invoice.revenue),
+      comments: invoice.comments ?? null,
+    }),
+  ];
+}
+
 export function BuyerInvoiceForm({
   invoice,
+  lines: savedLines = [],
   buyers,
   verticals,
+  buyerVerticalOffers,
 }: {
   invoice?: Invoice;
+  lines?: SavedLine[];
   buyers: { id: string; name: string }[];
   verticals: { id: string; name: string }[];
+  buyerVerticalOffers: Record<string, ContactVerticalOffer[]>;
 }) {
+  const [buyerId, setBuyerId] = useState(invoice?.buyerId ?? "");
+  const [lines, setLines] = useState<InvoiceLineDraft[]>(() => initialLines(invoice, savedLines));
+  const receivableDiffers =
+    invoice?.receivable != null && invoice.revenue != null && num(invoice.receivable) !== num(invoice.revenue);
   const [saveState, saveAction] = useActionState(upsertBuyerInvoice, {} as { error?: string });
   const [deleteState, deleteAction] = useActionState(deleteBuyerInvoice, {} as { error?: string });
   const error = saveState.error || deleteState.error;
@@ -60,19 +113,18 @@ export function BuyerInvoiceForm({
         sx={{ display: "grid", gap: 2, gridTemplateColumns: { md: "repeat(3, 1fr)" } }}
       >
         {invoice?.id ? <input type="hidden" name="id" value={invoice.id} /> : null}
-        <NativeSelect label="Buyer" name="buyerId" defaultValue={invoice?.buyerId} required>
+        <InvoiceWizardHiddenFields emails={[]} lines={lines} />
+        <NativeSelect
+          label="Buyer"
+          name="buyerId"
+          value={buyerId}
+          onChange={(event) => setBuyerId(event.target.value)}
+          required
+        >
           <option value="">Select buyer</option>
           {buyers.map((buyer) => (
             <option key={buyer.id} value={buyer.id}>
               {buyer.name}
-            </option>
-          ))}
-        </NativeSelect>
-        <NativeSelect label="Vertical" name="verticalId" defaultValue={invoice?.verticalId ?? ""}>
-          <option value="">None</option>
-          {verticals.map((vertical) => (
-            <option key={vertical.id} value={vertical.id}>
-              {vertical.name}
             </option>
           ))}
         </NativeSelect>
@@ -83,16 +135,26 @@ export function BuyerInvoiceForm({
         <TextInput label="Period start" name="periodStart" type="date" defaultValue={isoDate(invoice?.periodStart)} />
         <TextInput label="Period end" name="periodEnd" type="date" defaultValue={isoDate(invoice?.periodEnd)} />
 
-        <InvoiceLineFields
-          totalName="revenue"
-          totalLabel="Revenue"
-          mirrorName="receivable"
-          mirrorLabel="Receivable"
-          defaultLeadCount={invoice?.leadCount == null ? "" : String(num(invoice.leadCount))}
-          defaultRate={invoice?.rate == null ? "" : String(num(invoice.rate))}
-          defaultRateType={invoice?.rateType}
-          defaultTotal={invoice?.revenue == null ? "" : String(num(invoice.revenue))}
-          defaultMirror={invoice?.receivable == null ? "" : String(num(invoice.receivable))}
+        <Box sx={{ gridColumn: "1 / -1" }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Verticals billed
+          </Typography>
+          <InvoiceLineRowsEditor
+            lines={lines}
+            setLines={setLines}
+            verticals={verticals}
+            buyerVerticalOffers={buyerVerticalOffers}
+            buyerId={buyerId}
+          />
+        </Box>
+        <TextInput
+          label="Receivable"
+          name="receivable"
+          defaultValue={receivableDiffers ? String(num(invoice?.receivable)) : ""}
+          kind="decimal"
+          maxDecimals={2}
+          min={0}
+          helperText="Leave empty to match the invoice total. Fill in only for an adjusted amount."
         />
 
         <NetDaysSelect
