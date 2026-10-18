@@ -5,6 +5,7 @@ import { SendPublisherInvoiceButton } from "@/components/publisher-send-invoice"
 import { PageHeader } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
 import { getDirectoryOptions } from "@/lib/queries";
+import { withPlainNumbers } from "@/lib/serialize";
 import {
   assertPublisherInvoiceAccess,
   canWrite,
@@ -47,7 +48,7 @@ export default async function EditPublisherInvoicePage({
         ) : null}
       </PageHeader>
       <PublisherInvoiceForm
-        invoice={invoice}
+        invoice={withPlainNumbers(invoice)}
         publishers={options.publishers}
         verticals={options.verticals}
         lockedPublisherId={portal ? ctx.linkedPublisherId ?? undefined : undefined}

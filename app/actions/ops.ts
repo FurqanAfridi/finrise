@@ -7,12 +7,16 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PartnerTier, Role, TaxOrder, TenantRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireBrokerOps, requireSessionUser, requireTenant, requireTenantAdmin, TENANT_COOKIE, type TenantContext } from "@/lib/tenant";
+import { canWrite, requireBrokerOps, requireSessionUser, requireTenant, requireTenantAdmin, TENANT_COOKIE, type TenantContext } from "@/lib/tenant";
 import { convertedAmount } from "@/lib/finance/partnerLedger";
 import { money } from "@/lib/finance/decimal";
 import { financeLockError, financeLockErrorForMonth } from "@/lib/finance/month-lock-context";
 import { monthBounds, monthPeriodFilter } from "@/lib/finance/period";
-import { OPENING_BALANCE_DATE_KEY, OPENING_BALANCE_KEY } from "@/lib/finance/queries";
+import {
+  AVAILABLE_BALANCE_AT_KEY,
+  AVAILABLE_BALANCE_BY_KEY,
+  AVAILABLE_BALANCE_KEY,
+} from "@/lib/finance/queries";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { monthName } from "@/lib/utils";
 import { createCompanyForUser, updateCompanyIdentity } from "@/lib/company";
@@ -1554,16 +1558,16 @@ export async function upsertBankAccount(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
-/** Cash on hand when the company started tracking here. Movements before the date are not counted again. */
-export async function saveCashOpeningBalance(formData: FormData) {
-  const ctx = await requireTenantAdmin();
-  const amount = dec(formData, "openingBalance") ?? 0;
-  const date = str(formData, "openingDate");
-  if (hasInvalidNumber(amount)) return;
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+/** The real bank balance, typed in by staff. The Balance page builds its expected balance from it. */
+export async function saveAvailableBalance(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const ctx = await requireTenant();
+  if (!canWrite(ctx.tenantRole, ctx.platformRole)) return { error: "You cannot change the available balance." };
+  const amount = parseMoney(formField(formData, "availableBalance"), "Available balance", true);
+  if (!amount.ok) return invalid("availableBalance", amount.error);
   const values = [
-    { key: OPENING_BALANCE_KEY, value: String(amount) },
-    { key: OPENING_BALANCE_DATE_KEY, value: date ?? "" },
+    { key: AVAILABLE_BALANCE_KEY, value: String(amount.value) },
+    { key: AVAILABLE_BALANCE_AT_KEY, value: new Date().toISOString() },
+    { key: AVAILABLE_BALANCE_BY_KEY, value: ctx.name || ctx.email || "" },
   ];
   for (const row of values) {
     await prisma.setting.upsert({
@@ -1573,6 +1577,8 @@ export async function saveCashOpeningBalance(formData: FormData) {
     });
   }
   revalidatePath("/balance");
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Available balance saved." };
 }
 
 export async function upsertMonthReconciliation(formData: FormData) {

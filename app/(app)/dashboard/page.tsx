@@ -1,12 +1,17 @@
+import Link from "next/link";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
 import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import { AttentionList } from "@/components/dashboard/attention-list";
 import { MonthCashCard } from "@/components/dashboard/month-cash-card";
+import { MainCard } from "@/components/berry/main-card";
+import { MonthPicker } from "@/components/dashboard/month-picker";
 import { KpiCard } from "@/components/shared/kpi-card";
 import { PageHeader } from "@/components/page-header";
 import { displayDate } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { expectedBalance } from "@/lib/finance/monthlyOverview";
+import { formatMoney, formatMoneyWhole } from "@/lib/money";
 import { getDashboardAttention, getDashboardStats } from "@/lib/queries";
 import { notifyMonthStart, notifyOverdueInvoices } from "@/lib/overdue-notify";
 import { generateDueDraftInvoices } from "@/lib/daily-figures";
@@ -18,11 +23,29 @@ import {
   isPublisherPortal,
   requireTenant,
 } from "@/lib/tenant";
-import { num } from "@/lib/utils";
+import { monthName, num } from "@/lib/utils";
 import { gridSpacing } from "@/theme/berry";
 import type { AttentionItem } from "@/lib/queries";
 
-export default async function DashboardPage() {
+/** `?period=all` → null (all months); otherwise the month in the URL, defaulting to the current month. */
+function parseSelectedMonth(params: Record<string, string | undefined>) {
+  if (params.period === "all") return null;
+  const now = new Date();
+  const year = Number(params.year);
+  const month = Number(params.month);
+  const validYear = Number.isInteger(year) && year >= 2000 && year <= 2100;
+  const validMonth = Number.isInteger(month) && month >= 1 && month <= 12;
+  return {
+    year: validYear ? year : now.getUTCFullYear(),
+    month: validMonth ? month : now.getUTCMonth() + 1,
+  };
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const ctx = await requireTenant();
   const writer = canWrite(ctx.tenantRole, ctx.platformRole);
 
@@ -34,71 +57,99 @@ export default async function DashboardPage() {
     return <PublisherDashboard tenantId={ctx.tenantId} publisherId={ctx.linkedPublisherId ?? "__none__"} />;
   }
 
+  const selected = parseSelectedMonth(await searchParams);
   const [stats, attention] = await Promise.all([
-    getDashboardStats(ctx.tenantId),
+    getDashboardStats(ctx.tenantId, selected),
     getDashboardAttention(ctx.tenantId),
   ]);
   void notifyOverdueInvoices(ctx.tenantId);
   void notifyMonthStart(ctx.tenantId);
   void generateDueDraftInvoices(ctx.tenantId);
 
-  const latest = stats.latest?.overview;
-  const overdueSubtitle = [
-    stats.overdueCount === 0 ? "No buyer invoices past due" : `${stats.overdueCount} buyer invoice${stats.overdueCount === 1 ? "" : "s"} past due`,
-    stats.overduePublisherCount > 0
-      ? `${stats.overduePublisherCount} payable${stats.overduePublisherCount === 1 ? "" : "s"} past due (${formatMoney(stats.overdueAp)})`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const month = stats.period;
+  const monthLabel = selected ? `${monthName(selected.month)} ${selected.year}` : "All months";
+  const received = month.buyerReceived.toNumber();
+  const invoiced = month.buyerInvoiced.toNumber();
+  const publisherPaid = month.publisherPaid.toNumber();
+  const expensesPaid = month.expensesPaid.toNumber();
+  const paidOut = publisherPaid + expensesPaid;
+  const profit = month.profit.toNumber();
+  const toCollect = stats.periodToCollect;
+  const toPay = stats.periodToPay;
+  const expected = expectedBalance({ profit, toCollect, toPay });
 
   return (
     <Box>
       <PageHeader
         title="Dashboard"
-        description="Cash to collect, cash to pay, and the items that need a look today."
+        description={`${monthLabel} at a glance, plus what needs attention today.`}
         actionHref={writer ? "/buyers/generate" : undefined}
         actionLabel={writer ? "Create invoice" : undefined}
-      />
+      >
+        <MonthPicker selected={selected} />
+      </PageHeader>
 
       <Grid container spacing={gridSpacing}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <KpiCard
-            label="Money you'll receive"
-            value={formatMoney(stats.ar)}
-            subtitle={`${stats.openBuyerCount} open buyer invoice${stats.openBuyerCount === 1 ? "" : "s"} still unpaid`}
+            label="Received"
+            value={formatMoneyWhole(received)}
+            exactValue={formatMoney(received)}
+            subtitle={`of ${formatMoneyWhole(invoiced)} invoiced`}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <KpiCard
-            label="Money to pay"
-            value={formatMoney(stats.ap)}
-            subtitle={`${stats.openPublisherCount} open publisher invoice${stats.openPublisherCount === 1 ? "" : "s"} still unpaid`}
+            label="Paid out"
+            value={formatMoneyWhole(paidOut)}
+            exactValue={formatMoney(paidOut)}
+            subtitle={`Publishers ${formatMoneyWhole(publisherPaid)} · Expenses ${formatMoneyWhole(expensesPaid)}`}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <KpiCard
-            label="Profit this month"
-            value={formatMoney(latest?.profit.toNumber() ?? stats.profit)}
+            label={month.profit.gte(0) ? "Profit" : "Loss"}
+            value={formatMoneyWhole(profit)}
+            exactValue={formatMoney(profit)}
             subtitle={
-              latest
-                ? `Buyers paid in ${formatMoney(latest.buyerReceived.toNumber())} · paid out ${formatMoney(latest.publisherPaid.toNumber() + latest.expensesPaid.toNumber())}`
-                : "After publisher payouts and expenses"
+              month.marginPercent && month.revenue.gt(0) && month.profit.gte(0)
+                ? `${month.marginPercent.toFixed(1)}% margin`
+                : "Received minus paid out"
             }
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <KpiCard
-            label="Past due"
-            value={formatMoney(stats.overdueAr + stats.overdueAp)}
-            subtitle={overdueSubtitle}
+            label="Expected balance"
+            value={formatMoneyWhole(expected)}
+            exactValue={formatMoney(expected)}
+            subtitle={`Once ${formatMoneyWhole(toCollect)} is collected and ${formatMoneyWhole(toPay)} is paid`}
           />
+        </Grid>
+
+        <Grid size={12}>
+          <MainCard contentSX={{ py: 1.5 }}>
+            <Stack direction="row" sx={{ flexWrap: "wrap", columnGap: 4, rowGap: 1, alignItems: "baseline" }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                Right now
+              </Typography>
+              <TodayFigure label="To collect" value={stats.ar} href="/buyers?status=UNPAID" />
+              <TodayFigure label="To pay" value={stats.ap} href="/publishers?status=UNPAID" />
+              <TodayFigure label="Past due" value={stats.overdueAr + stats.overdueAp} href="/buyers?status=UNPAID" />
+              <Typography variant="body2" color="text.secondary">
+                Waiting for approval{" "}
+                <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
+                  {stats.pendingApprovals}
+                </Box>
+              </Typography>
+            </Stack>
+          </MainCard>
         </Grid>
 
         <Grid size={{ xs: 12, lg: 7 }}>
           <MonthCashCard
             trend={stats.trend}
-            tenantName={ctx.tenantName}
+            selected={selected}
             unbilledAmount={stats.unbilledBuyerAmount + stats.unbilledPublisherAmount}
             unbilledCount={stats.unbilledBuyerCount + stats.unbilledPublisherCount}
           />
@@ -124,6 +175,19 @@ export default async function DashboardPage() {
         </Grid>
       </Grid>
     </Box>
+  );
+}
+
+function TodayFigure({ label, value, href }: { label: string; value: number; href: string }) {
+  return (
+    <Typography variant="body2" color="text.secondary">
+      <Link href={href} style={{ color: "inherit" }}>
+        {label}
+      </Link>{" "}
+      <Box component="span" className="fr-money" title={formatMoney(value)} sx={{ fontWeight: 700, color: "text.primary" }}>
+        {formatMoneyWhole(value)}
+      </Box>
+    </Typography>
   );
 }
 

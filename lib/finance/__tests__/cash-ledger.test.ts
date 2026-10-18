@@ -21,18 +21,6 @@ describe("buildCashLedger", () => {
     expect(ledger.availableBalance.toNumber()).toBe(400);
   });
 
-  it("starts from the opening balance", () => {
-    const ledger = buildCashLedger(ENTRIES, { opening: money(5000) });
-    expect(ledger.rows[0].balance.toNumber()).toBe(6000);
-    expect(ledger.availableBalance.toNumber()).toBe(5400);
-  });
-
-  it("skips movements before the opening date", () => {
-    const ledger = buildCashLedger(ENTRIES, { opening: money(5000), openingDate: utc(2026, 8, 1) });
-    expect(ledger.rows.map((row) => row.id)).toEqual(["3", "4"]);
-    expect(ledger.availableBalance.toNumber()).toBe(4700);
-  });
-
   it("brings earlier movements forward when a date range is set", () => {
     const ledger = buildCashLedger(ENTRIES, { from: utc(2026, 8, 1), to: utc(2026, 8, 2) });
     expect(ledger.broughtForward.toNumber()).toBe(700);

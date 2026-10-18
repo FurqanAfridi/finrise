@@ -6,6 +6,7 @@ import { PublisherInvoicesView } from "@/components/shared/publisher-invoices-vi
 import { MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
+import { createdByLabel } from "@/lib/invoice-audit";
 import { listPeriodFilter, periodChipLabel, yearSpan } from "@/lib/finance/period";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { invoiceVariance } from "@/lib/finance/variance";
@@ -84,7 +85,7 @@ export default async function PublishersPage({
   const [rows, total, publishers, verticals, totals] = await Promise.all([
     prisma.publisherInvoice.findMany({
       where,
-      include: { publisher: true, vertical: true },
+      include: { publisher: true, vertical: true, createdBy: { select: { name: true, email: true } } },
       orderBy: [{ dueDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -148,6 +149,7 @@ export default async function PublishersPage({
       paymentStatus: row.paymentStatus,
       paidApprovalStatus: row.paidApprovalStatus as PaidApprovalStatus | null,
       isDraft: row.isDraft,
+      createdLabel: admin ? createdByLabel(row) : null,
     };
   });
 

@@ -61,8 +61,10 @@ export async function importHistoricalRows(input: {
   commit: boolean;
   sourceLabel: string;
   actor: FinanceActor;
+  /** User running the import; recorded as the creator of each row. */
+  createdById: string;
 }): Promise<ImportRunResult> {
-  const { tenantId, kind, rows, commit, sourceLabel, actor } = input;
+  const { tenantId, kind, rows, commit, sourceLabel, actor, createdById } = input;
   if (rows.length === 0) {
     return { error: "No data rows found. Include a header line and at least one row." };
   }
@@ -159,6 +161,7 @@ export async function importHistoricalRows(input: {
           await prisma.buyerInvoice.create({
             data: {
               tenantId,
+              createdById,
               buyerId: buyer.id,
               verticalId: vertical?.id,
               periodLabel: period.label,
@@ -204,6 +207,7 @@ export async function importHistoricalRows(input: {
           await prisma.publisherInvoice.create({
             data: {
               tenantId,
+              createdById,
               publisherId: publisher.id,
               verticalId: vertical?.id,
               periodLabel: period.label,

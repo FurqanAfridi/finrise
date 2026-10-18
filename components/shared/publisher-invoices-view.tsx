@@ -42,6 +42,8 @@ export type PublisherInvoiceRow = {
   paymentStatus: PaymentStatus;
   paidApprovalStatus: PaidApprovalStatus | null;
   isDraft?: boolean;
+  /** "Rida · Oct 15, 2026"; only sent to company admins. */
+  createdLabel?: string | null;
 };
 
 function DrawerRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -283,6 +285,14 @@ export function PublisherInvoicesView({
                   <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
                     Paid {formatMoney(Math.abs(selected.varianceAmount))}
                     {selected.varianceAmount >= 0 ? " more than owed" : " less than owed"}
+                  </Typography>
+                </DrawerRow>
+              ) : null}
+              {selected.createdLabel ? (
+                <DrawerRow label="Created by">
+                  <Typography variant="body2">
+                    {selected.createdLabel} ·{" "}
+                    <Link href={`/activity?invoice=${selected.id}`}>View history</Link>
                   </Typography>
                 </DrawerRow>
               ) : null}

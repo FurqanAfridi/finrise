@@ -44,6 +44,8 @@ export type BuyerInvoiceRow = {
   paymentStatus: PaymentStatus;
   overdue: boolean;
   isDraft?: boolean;
+  /** "Rida · Oct 15, 2026"; only sent to company admins. */
+  createdLabel?: string | null;
 };
 
 function DrawerRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -276,6 +278,14 @@ export function BuyerInvoicesView({
                     {selected.varianceAmount >= 0
                       ? `Buyer paid ${formatMoney(Math.abs(selected.varianceAmount))} more than invoiced`
                       : `Buyer paid ${formatMoney(Math.abs(selected.varianceAmount))} less than invoiced`}
+                  </Typography>
+                </DrawerRow>
+              ) : null}
+              {selected.createdLabel ? (
+                <DrawerRow label="Created by">
+                  <Typography variant="body2">
+                    {selected.createdLabel} ·{" "}
+                    <Link href={`/activity?invoice=${selected.id}`}>View history</Link>
                   </Typography>
                 </DrawerRow>
               ) : null}

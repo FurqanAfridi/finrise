@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { InvoiceStatus, PaidApprovalStatus, PaymentStatus, RateType } from "@prisma/client";
+import { InvoiceStatus, PaidApprovalStatus, PaymentStatus, Prisma, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireTenant, requireTenantAdmin, canApprovePayments, canWrite } from "@/lib/tenant";
 import type { FormActionState } from "@/lib/form-state";
@@ -19,6 +19,9 @@ import {
   summarizeInvoiceLines,
 } from "@/lib/invoice-lines";
 import { financeLockError } from "@/lib/finance/month-lock-context";
+import { describeChanges, invoiceActivityLabel, logInvoiceActivity } from "@/lib/invoice-audit";
+import { PAYMENT_STATUS_LABEL } from "@/lib/status";
+import { formatMoney } from "@/lib/money";
 import {
   formField,
   parseInteger,
@@ -58,6 +61,46 @@ function revalidateLedgers() {
   revalidatePath("/dashboard");
   revalidatePath("/pnl");
   revalidatePath("/reports");
+}
+
+function buyerChanges(
+  before: Prisma.BuyerInvoiceGetPayload<object>,
+  after: Prisma.BuyerInvoiceGetPayload<object>,
+  buyerNames: { before: string; after: string },
+) {
+  return describeChanges([
+    { label: "Buyer", before: buyerNames.before, after: buyerNames.after },
+    { label: "Invoice number", before: before.invoiceNumber, after: after.invoiceNumber },
+    { label: "Period", before: before.periodLabel, after: after.periodLabel },
+    { label: "Due date", before: before.dueDate, after: after.dueDate },
+    { label: "Amount due", before: before.receivable, after: after.receivable, money: true },
+    { label: "Received", before: before.received, after: after.received, money: true },
+    {
+      label: "Status",
+      before: PAYMENT_STATUS_LABEL[before.paymentStatus],
+      after: PAYMENT_STATUS_LABEL[after.paymentStatus],
+    },
+  ]);
+}
+
+function publisherChanges(
+  before: Prisma.PublisherInvoiceGetPayload<object>,
+  after: Prisma.PublisherInvoiceGetPayload<object>,
+  publisherNames: { before: string; after: string },
+) {
+  return describeChanges([
+    { label: "Publisher", before: publisherNames.before, after: publisherNames.after },
+    { label: "Invoice number", before: before.invoiceNumber, after: after.invoiceNumber },
+    { label: "Period", before: before.periodLabel, after: after.periodLabel },
+    { label: "Due date", before: before.dueDate, after: after.dueDate },
+    { label: "You owe", before: before.payable, after: after.payable, money: true },
+    { label: "Paid", before: before.paid, after: after.paid, money: true },
+    {
+      label: "Status",
+      before: PAYMENT_STATUS_LABEL[before.paymentStatus],
+      after: PAYMENT_STATUS_LABEL[after.paymentStatus],
+    },
+  ]);
 }
 
 async function invoiceLockError(
@@ -172,8 +215,25 @@ export async function upsertBuyerInvoice(
 
   const saved = id
     ? await prisma.buyerInvoice.update({ where: { id }, data })
-    : await prisma.buyerInvoice.create({ data });
+    : await prisma.buyerInvoice.create({ data: { ...data, createdById: ctx.userId } });
   await replaceBuyerInvoiceLines(ctx.tenantId, saved.id, lineRows.value);
+
+  const previousBuyerName =
+    existing && existing.buyerId !== buyerId
+      ? ((await prisma.buyer.findUnique({ where: { id: existing.buyerId }, select: { name: true } }))?.name ?? "")
+      : buyer.name;
+  const changes = existing ? buyerChanges(existing, saved, { before: previousBuyerName, after: buyer.name }) : null;
+  if (!existing || changes) {
+    await logInvoiceActivity({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      kind: "buyer",
+      invoiceId: saved.id,
+      invoiceLabel: invoiceActivityLabel({ ...saved, contactName: buyer.name }),
+      action: existing ? "EDITED" : "CREATED",
+      details: existing ? changes : `Amount due ${formatMoney(Number(saved.receivable))}`,
+    });
+  }
 
   const settings = await getFinanceSettings(ctx.tenantId);
   const variance = invoiceVariance(saved.receivable.toString(), saved.received?.toString() ?? 0, settings.varianceToleranceAmount);
@@ -199,11 +259,23 @@ export async function deleteBuyerInvoice(
   const ctx = await requireTenant();
   const id = str(formData, "id");
   if (!id) return { error: "Invoice not found." };
-  const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  const invoice = await prisma.buyerInvoice.findFirst({
+    where: { id, tenantId: ctx.tenantId },
+    include: { buyer: { select: { name: true } } },
+  });
   if (!invoice) return { error: "Invoice not found." };
   const closed = await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate);
   if (closed) return { error: closed };
   await prisma.buyerInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
+  await logInvoiceActivity({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    kind: "buyer",
+    invoiceId: invoice.id,
+    invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.buyer.name }),
+    action: "DELETED",
+    details: `Amount due ${formatMoney(Number(invoice.receivable))}`,
+  });
   revalidateLedgers();
   redirect("/buyers");
 }
@@ -218,7 +290,17 @@ export async function bulkDeleteBuyerInvoices(
 
   const invoices = await prisma.buyerInvoice.findMany({
     where: { tenantId: ctx.tenantId, id: { in: ids } },
-    select: { id: true, periodStart: true, periodEnd: true, dueDate: true, invoiceDate: true },
+    select: {
+      id: true,
+      periodStart: true,
+      periodEnd: true,
+      dueDate: true,
+      invoiceDate: true,
+      invoiceNumber: true,
+      periodLabel: true,
+      receivable: true,
+      buyer: { select: { name: true } },
+    },
   });
   if (invoices.length === 0) return { error: "No matching invoices found." };
 
@@ -236,6 +318,17 @@ export async function bulkDeleteBuyerInvoices(
   await prisma.buyerInvoice.deleteMany({
     where: { tenantId: ctx.tenantId, id: { in: invoices.map((row) => row.id) } },
   });
+  for (const invoice of invoices) {
+    await logInvoiceActivity({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      kind: "buyer",
+      invoiceId: invoice.id,
+      invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.buyer.name }),
+      action: "DELETED",
+      details: `Bulk delete · ${formatMoney(Number(invoice.receivable))}`,
+    });
+  }
   revalidateLedgers();
   return {
     ok: true,
@@ -250,7 +343,10 @@ export async function markBuyerPaid(formData: FormData) {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   if (!id) return;
-  const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  const invoice = await prisma.buyerInvoice.findFirst({
+    where: { id, tenantId: ctx.tenantId },
+    include: { buyer: { select: { name: true } } },
+  });
   if (!invoice) return;
   const closed = await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate);
   if (closed) return;
@@ -266,6 +362,15 @@ export async function markBuyerPaid(formData: FormData) {
       paidAt: date(formData, "paidAt") ?? invoice.paidAt ?? new Date(),
       paymentMethod: str(formData, "paymentMethod") ?? invoice.paymentMethod,
     },
+  });
+  await logInvoiceActivity({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    kind: "buyer",
+    invoiceId: invoice.id,
+    invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.buyer.name }),
+    action: "PAID",
+    details: `Received ${formatMoney(received)} of ${formatMoney(Number(invoice.receivable))}`,
   });
   const settings = await getFinanceSettings(ctx.tenantId);
   const variance = invoiceVariance(invoice.receivable.toString(), received, settings.varianceToleranceAmount);
@@ -347,6 +452,7 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
   const saved = await prisma.buyerInvoice.create({
     data: {
       tenantId: ctx.tenantId,
+      createdById: ctx.userId,
       buyerId,
       verticalId: summary.verticalId,
       periodLabel: str(formData, "periodLabel"),
@@ -368,6 +474,15 @@ export async function generateBuyerInvoice(_prev: { error?: string }, formData: 
     },
   });
   await replaceBuyerInvoiceLines(ctx.tenantId, saved.id, lineRows.value);
+  await logInvoiceActivity({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    kind: "buyer",
+    invoiceId: saved.id,
+    invoiceLabel: invoiceActivityLabel({ ...saved, contactName: buyer.name }),
+    action: "CREATED",
+    details: `Amount due ${formatMoney(receivable)}`,
+  });
 
   revalidateLedgers();
   redirect(`/invoices/${saved.id}`);
@@ -377,12 +492,23 @@ export async function markBuyerInvoiceSent(formData: FormData) {
   const ctx = await requireTenant();
   const id = str(formData, "id");
   if (!id) return;
-  const invoice = await prisma.buyerInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  const invoice = await prisma.buyerInvoice.findFirst({
+    where: { id, tenantId: ctx.tenantId },
+    include: { buyer: { select: { name: true } } },
+  });
   if (!invoice) return;
   if (await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
   await prisma.buyerInvoice.updateMany({
     where: { id, tenantId: ctx.tenantId },
-      data: { invoiceStatus: InvoiceStatus.SENT, isDraft: false },
+    data: { invoiceStatus: InvoiceStatus.SENT, isDraft: false },
+  });
+  await logInvoiceActivity({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    kind: "buyer",
+    invoiceId: invoice.id,
+    invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.buyer.name }),
+    action: "SENT",
   });
   revalidateLedgers();
 }
@@ -512,7 +638,26 @@ export async function upsertPublisherInvoice(
 
   const saved = id
     ? await prisma.publisherInvoice.update({ where: { id }, data })
-    : await prisma.publisherInvoice.create({ data });
+    : await prisma.publisherInvoice.create({ data: { ...data, createdById: ctx.userId } });
+
+  const previousPublisherName =
+    previous && previous.publisherId !== publisherId
+      ? ((await prisma.publisher.findUnique({ where: { id: previous.publisherId }, select: { name: true } }))?.name ?? "")
+      : publisher.name;
+  const changes = previous
+    ? publisherChanges(previous, saved, { before: previousPublisherName, after: publisher.name })
+    : null;
+  if (!previous || changes) {
+    await logInvoiceActivity({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      kind: "publisher",
+      invoiceId: saved.id,
+      invoiceLabel: invoiceActivityLabel({ ...saved, contactName: publisher.name }),
+      action: previous ? "EDITED" : "CREATED",
+      details: previous ? changes : `You owe ${formatMoney(Number(saved.payable))}`,
+    });
+  }
 
   if (markedPaid) {
     await notifyReviewers({
@@ -536,11 +681,23 @@ export async function deletePublisherInvoice(
   const ctx = await requireTenant();
   const id = str(formData, "id");
   if (!id) return { error: "Invoice not found." };
-  const invoice = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  const invoice = await prisma.publisherInvoice.findFirst({
+    where: { id, tenantId: ctx.tenantId },
+    include: { publisher: { select: { name: true } } },
+  });
   if (!invoice) return { error: "Invoice not found." };
   const closed = await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate);
   if (closed) return { error: closed };
   await prisma.publisherInvoice.deleteMany({ where: { id, tenantId: ctx.tenantId } });
+  await logInvoiceActivity({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    kind: "publisher",
+    invoiceId: invoice.id,
+    invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.publisher.name }),
+    action: "DELETED",
+    details: `You owe ${formatMoney(Number(invoice.payable))}`,
+  });
   revalidateLedgers();
   redirect("/publishers");
 }
@@ -555,7 +712,17 @@ export async function bulkDeletePublisherInvoices(
 
   const invoices = await prisma.publisherInvoice.findMany({
     where: { tenantId: ctx.tenantId, id: { in: ids } },
-    select: { id: true, periodStart: true, periodEnd: true, dueDate: true, invoiceDate: true },
+    select: {
+      id: true,
+      periodStart: true,
+      periodEnd: true,
+      dueDate: true,
+      invoiceDate: true,
+      invoiceNumber: true,
+      periodLabel: true,
+      payable: true,
+      publisher: { select: { name: true } },
+    },
   });
   if (invoices.length === 0) return { error: "No matching payables found." };
 
@@ -573,6 +740,17 @@ export async function bulkDeletePublisherInvoices(
   await prisma.publisherInvoice.deleteMany({
     where: { tenantId: ctx.tenantId, id: { in: invoices.map((row) => row.id) } },
   });
+  for (const invoice of invoices) {
+    await logInvoiceActivity({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      kind: "publisher",
+      invoiceId: invoice.id,
+      invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.publisher.name }),
+      action: "DELETED",
+      details: `Bulk delete · ${formatMoney(Number(invoice.payable))}`,
+    });
+  }
   revalidateLedgers();
   return {
     ok: true,
@@ -609,6 +787,15 @@ export async function markPublisherPaid(formData: FormData) {
       paidApprovedById: null,
     },
   });
+  await logInvoiceActivity({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    kind: "publisher",
+    invoiceId: invoice.id,
+    invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.publisher.name }),
+    action: "PAID",
+    details: `Paid ${formatMoney(paid)} of ${formatMoney(Number(invoice.payable))}`,
+  });
   await notifyReviewers({
     tenantId: ctx.tenantId,
     type: NOTIFICATION.PUBLISHER_PAID_APPROVAL,
@@ -626,17 +813,32 @@ export async function approvePublisherPayment(formData: FormData) {
   const id = str(formData, "id");
   const decision = str(formData, "decision");
   if (!id) return;
-  const invoice = await prisma.publisherInvoice.findFirst({ where: { id, tenantId: ctx.tenantId } });
+  const invoice = await prisma.publisherInvoice.findFirst({
+    where: { id, tenantId: ctx.tenantId },
+    include: { publisher: { select: { name: true } } },
+  });
   if (!invoice) return;
   if (await invoiceLockError(ctx, invoice.periodStart, invoice.periodEnd, invoice.dueDate)) return;
-  await prisma.publisherInvoice.updateMany({
+  const rejected = decision === "reject";
+  const { count } = await prisma.publisherInvoice.updateMany({
     where: { id, tenantId: ctx.tenantId, paidApprovalStatus: PaidApprovalStatus.PENDING },
     data: {
-      paidApprovalStatus: decision === "reject" ? PaidApprovalStatus.REJECTED : PaidApprovalStatus.APPROVED,
+      paidApprovalStatus: rejected ? PaidApprovalStatus.REJECTED : PaidApprovalStatus.APPROVED,
       paidApprovedAt: new Date(),
       paidApprovedById: ctx.userId,
     },
   });
+  if (count > 0) {
+    await logInvoiceActivity({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      kind: "publisher",
+      invoiceId: invoice.id,
+      invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.publisher.name }),
+      action: rejected ? "REJECTED" : "APPROVED",
+      details: invoice.paid == null ? null : `Payment of ${formatMoney(Number(invoice.paid))}`,
+    });
+  }
   revalidateLedgers();
   revalidatePath("/notifications");
 }

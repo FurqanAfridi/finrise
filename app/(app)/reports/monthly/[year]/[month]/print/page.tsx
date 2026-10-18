@@ -1,5 +1,7 @@
+import { notFound } from "next/navigation";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import { parseYearMonth } from "@/lib/finance/period";
 import { computeTenantMonth, loadMonthlyLines } from "@/lib/finance/queries";
 import { money } from "@/lib/money";
 import { requireBrokerOps } from "@/lib/tenant";
@@ -12,8 +14,9 @@ export default async function PrintMonthlyPage({
 }) {
   const ctx = await requireBrokerOps();
   const { year, month } = await params;
-  const y = Number(year);
-  const m = Number(month);
+  const parsed = parseYearMonth(year, month);
+  if (!parsed) notFound();
+  const { year: y, month: m } = parsed;
   const [{ overview, distribution }, lines] = await Promise.all([
     computeTenantMonth(ctx.tenantId, y, m),
     loadMonthlyLines(ctx.tenantId, y, m),

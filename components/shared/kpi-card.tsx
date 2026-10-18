@@ -9,10 +9,13 @@ export function KpiCard({
   label,
   value,
   subtitle,
+  exactValue,
 }: {
   label: string;
   value: string;
   subtitle?: string;
+  /** Full-precision value shown on hover when `value` is rounded. */
+  exactValue?: string;
 }) {
   return (
     <MainCard content={false} sx={{ height: "100%" }}>
@@ -22,6 +25,7 @@ export function KpiCard({
         </Typography>
         <Typography
           className="fr-money"
+          title={exactValue}
           sx={{
             mt: 1,
             fontSize: "1.5rem",

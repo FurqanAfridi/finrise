@@ -3,6 +3,7 @@ import { BuyerInvoiceForm } from "../invoice-form";
 import { PageHeader } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
 import { getDirectoryOptions } from "@/lib/queries";
+import { withPlainNumbers } from "@/lib/serialize";
 import {
   assertBuyerInvoiceAccess,
   canWrite,
@@ -29,7 +30,7 @@ export default async function EditBuyerInvoicePage({
   return (
     <div>
       <PageHeader title="Edit buyer invoice" description={invoice.invoiceNumber ?? invoice.periodLabel ?? ""} />
-      <BuyerInvoiceForm invoice={invoice} buyers={options.buyers} verticals={options.verticals} />
+      <BuyerInvoiceForm invoice={withPlainNumbers(invoice)} buyers={options.buyers} verticals={options.verticals} />
     </div>
   );
 }

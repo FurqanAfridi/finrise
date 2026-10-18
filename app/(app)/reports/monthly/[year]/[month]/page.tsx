@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -16,7 +17,7 @@ import { KpiCard } from "@/components/shared/kpi-card";
 import { NativeSelect } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { computeTenantMonth, listMonthKeys, loadMonthlyLines } from "@/lib/finance/queries";
-import { previousMonth } from "@/lib/finance/period";
+import { parseYearMonth, previousMonth } from "@/lib/finance/period";
 import { formatMoney } from "@/lib/money";
 import { requireBrokerOps } from "@/lib/tenant";
 import { monthName } from "@/lib/utils";
@@ -29,8 +30,9 @@ export default async function MonthlyOverviewPage({
 }) {
   const ctx = await requireBrokerOps();
   const { year: yearRaw, month: monthRaw } = await params;
-  const year = Number(yearRaw);
-  const month = Number(monthRaw);
+  const parsed = parseYearMonth(yearRaw, monthRaw);
+  if (!parsed) notFound();
+  const { year, month } = parsed;
   const prev = previousMonth(year, month);
 
   const [current, previous, lines, keys] = await Promise.all([

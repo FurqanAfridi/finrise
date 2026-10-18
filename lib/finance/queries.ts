@@ -1,10 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cents, money } from "@/lib/finance/decimal";
+import { OPEN_BUYER_STATUSES, OPEN_PUBLISHER_STATUSES } from "@/lib/status";
 import { computeMonthlyOverview } from "@/lib/finance/monthlyOverview";
-import { monthBounds, periodFilter, yearMonthsInRange } from "@/lib/finance/period";
+import { monthBounds, monthPeriodFilter, periodFilter, yearMonthsInRange } from "@/lib/finance/period";
 import { tryDistributeProfit } from "@/lib/finance/profitDistribution";
-import type { FinanceSettingsInput, MonthlyOverview, PartnerInput } from "@/lib/finance/types";
+import type { FinanceSettingsInput, MonthlyOverview, MonthlyTotals, PartnerInput } from "@/lib/finance/types";
 import type { CashLedgerEntry } from "@/lib/finance/cash-ledger";
 
 function d(value: Prisma.Decimal | number | null | undefined) {
@@ -54,6 +55,71 @@ export async function loadMonthlyTotals(tenantId: string, year: number, month: n
     }),
     prisma.expense.aggregate({
       where: { tenantId, year, month },
+      _sum: { actual: true, paid: true },
+    }),
+  ]);
+
+  return {
+    buyerInvoiced: d(buyers._sum.receivable ?? buyers._sum.revenue),
+    buyerReceived: d(buyers._sum.received),
+    publisherOwed: d(publishers._sum.payable ?? publishers._sum.amount),
+    publisherPaid: d(publishers._sum.paid),
+    expensesActual: d(expenses._sum.actual),
+    expensesPaid: d(expenses._sum.paid),
+  };
+}
+
+/**
+ * Money still open: invoices left to collect, payables left to pay (drafts included), and booked
+ * expenses not yet paid. Bills in a closed status (Paid, Buyer lost, No billables, Compensated…) are not counted.
+ * Pass `period` to limit it to one month; omit it for all months.
+ */
+export async function loadOpenBalances(
+  tenantId: string,
+  period?: { year: number; month: number; fiscalMonthStartDay: number },
+) {
+  const dateFilter = period ? monthPeriodFilter(period.year, period.month, period.fiscalMonthStartDay) : {};
+  const [buyers, publishers, expenses] = await Promise.all([
+    prisma.buyerInvoice.aggregate({
+      where: { tenantId, paymentStatus: { in: OPEN_BUYER_STATUSES }, ...dateFilter },
+      _sum: { receivable: true, received: true },
+      _count: true,
+    }),
+    prisma.publisherInvoice.aggregate({
+      where: { tenantId, paymentStatus: { in: OPEN_PUBLISHER_STATUSES }, ...dateFilter },
+      _sum: { payable: true, paid: true },
+      _count: true,
+    }),
+    prisma.expense.aggregate({
+      where: period ? { tenantId, year: period.year, month: period.month } : { tenantId },
+      _sum: { actual: true, paid: true },
+    }),
+  ]);
+  const toCollect = d(buyers._sum.receivable).sub(d(buyers._sum.received));
+  const toPay = d(publishers._sum.payable).sub(d(publishers._sum.paid));
+  const expensesToPay = d(expenses._sum.actual).sub(d(expenses._sum.paid));
+  return {
+    toCollect: toCollect.lt(0) ? money(0) : toCollect,
+    toCollectCount: buyers._count,
+    toPay: toPay.lt(0) ? money(0) : toPay,
+    toPayCount: publishers._count,
+    expensesToPay: expensesToPay.lt(0) ? money(0) : expensesToPay,
+  };
+}
+
+/** Same totals as loadMonthlyTotals, across every month the company has data for. */
+export async function loadAllTimeTotals(tenantId: string): Promise<MonthlyTotals> {
+  const [buyers, publishers, expenses] = await Promise.all([
+    prisma.buyerInvoice.aggregate({
+      where: { tenantId },
+      _sum: { receivable: true, received: true, revenue: true },
+    }),
+    prisma.publisherInvoice.aggregate({
+      where: { tenantId },
+      _sum: { payable: true, amount: true, paid: true },
+    }),
+    prisma.expense.aggregate({
+      where: { tenantId },
       _sum: { actual: true, paid: true },
     }),
   ]);
@@ -314,21 +380,6 @@ export async function overallProfit(tenantId: string) {
   };
 }
 
-export const OPENING_BALANCE_KEY = "cashOpeningBalance";
-export const OPENING_BALANCE_DATE_KEY = "cashOpeningBalanceDate";
-
-export async function getCashOpening(tenantId: string) {
-  const rows = await prisma.setting.findMany({
-    where: { tenantId, key: { in: [OPENING_BALANCE_KEY, OPENING_BALANCE_DATE_KEY] } },
-  });
-  const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
-  const date = byKey[OPENING_BALANCE_DATE_KEY] ? new Date(`${byKey[OPENING_BALANCE_DATE_KEY]}T00:00:00Z`) : null;
-  return {
-    opening: cents(byKey[OPENING_BALANCE_KEY] ?? 0),
-    openingDate: date && !Number.isNaN(date.getTime()) ? date : null,
-  };
-}
-
 /**
  * Every cash movement for the company: buyer money received, approved publisher payments,
  * paid expenses, and partner withdrawals. Draft bills count once money has moved on them, as in Reports.
@@ -418,4 +469,22 @@ export async function loadCashLedgerEntries(tenantId: string): Promise<CashLedge
       href: "/partners",
     })),
   ];
+}
+
+export const AVAILABLE_BALANCE_KEY = "cashAvailableBalance";
+export const AVAILABLE_BALANCE_AT_KEY = "cashAvailableBalanceAt";
+export const AVAILABLE_BALANCE_BY_KEY = "cashAvailableBalanceBy";
+
+/** The bank balance a team member typed in, with when and who. Null amount means nobody has entered it yet. */
+export async function getAvailableBalance(tenantId: string) {
+  const rows = await prisma.setting.findMany({
+    where: { tenantId, key: { in: [AVAILABLE_BALANCE_KEY, AVAILABLE_BALANCE_AT_KEY, AVAILABLE_BALANCE_BY_KEY] } },
+  });
+  const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  const at = byKey[AVAILABLE_BALANCE_AT_KEY] ? new Date(byKey[AVAILABLE_BALANCE_AT_KEY]) : null;
+  return {
+    amount: byKey[AVAILABLE_BALANCE_KEY] ? cents(byKey[AVAILABLE_BALANCE_KEY]) : null,
+    updatedAt: at && !Number.isNaN(at.getTime()) ? at : null,
+    updatedBy: byKey[AVAILABLE_BALANCE_BY_KEY] || null,
+  };
 }

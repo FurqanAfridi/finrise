@@ -5,7 +5,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { MainCard } from "@/components/berry/main-card";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatMoneyWhole } from "@/lib/money";
 import { monthName } from "@/lib/utils";
 
 export type MonthTrendRow = {
@@ -26,16 +26,17 @@ function barPct(value: number, max: number) {
 
 export function MonthCashCard({
   trend,
-  tenantName,
+  selected,
   unbilledAmount,
   unbilledCount,
 }: {
   trend: MonthTrendRow[];
-  tenantName: string;
+  /** Null when the dashboard shows all months: no bar is highlighted and the breakdown is hidden. */
+  selected: { year: number; month: number } | null;
   unbilledAmount: number;
   unbilledCount: number;
 }) {
-  const latest = trend[trend.length - 1];
+  const latest = selected ? trend.find((row) => row.year === selected.year && row.month === selected.month) : undefined;
   const max = Math.max(
     ...trend.flatMap((row) => [row.received, row.paidOut, Math.abs(row.profit)]),
     1,
@@ -43,7 +44,7 @@ export function MonthCashCard({
 
   return (
     <MainCard
-      title="Cash this year"
+      title="Last 6 months"
       secondary={
         latest ? (
           <Link href={`/reports/monthly/${latest.year}/${latest.month}`} style={{ textDecoration: "none" }}>
@@ -55,9 +56,9 @@ export function MonthCashCard({
       }
     >
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.55 }}>
-        Money in, money out, and profit for {tenantName}. Hover a bar to see that month.
+        Money in, money out, and profit. Click a month to open it.
       </Typography>
-      {trend.length === 0 ? (
+      {trend.every((row) => row.received === 0 && row.paidOut === 0 && row.invoiced === 0) ? (
         <EmptyState
           title="No months yet"
           description="Create invoices and record payments to see profit here."
@@ -81,58 +82,74 @@ export function MonthCashCard({
               pb: 0.5,
             }}
           >
-            {trend.map((row) => (
-              <Box
-                key={row.label}
-                sx={{
-                  flex: "1 0 36px",
-                  minWidth: 36,
-                  height: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <Box
-                  sx={{ display: "flex", alignItems: "flex-end", gap: 0.25, height: 1, justifyContent: "center" }}
-                  title={`${row.label}: received ${formatMoney(row.received)}, paid out ${formatMoney(row.paidOut)}, profit ${formatMoney(row.profit)}`}
+            {trend.map((row) => {
+              const isSelected = !selected || (row.year === selected.year && row.month === selected.month);
+              return (
+                <Link
+                  key={row.label}
+                  href={`/dashboard?year=${row.year}&month=${row.month}`}
+                  aria-current={isSelected ? "true" : undefined}
+                  style={{ display: "flex", flex: "1 0 36px", minWidth: 36, height: "100%", textDecoration: "none" }}
                 >
                   <Box
                     sx={{
-                      flex: 1,
-                      maxWidth: 10,
-                      borderRadius: "6px 6px 0 0",
-                      bgcolor: "primary.main",
-                      height: barPct(row.received, max),
-                      transition: "height 200ms ease",
+                      opacity: isSelected ? 1 : 0.45,
+                      transition: "opacity 150ms ease",
+                      "&:hover": { opacity: 1 },
+                      flex: "1 0 36px",
+                      minWidth: 36,
+                      height: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "flex-end",
                     }}
-                  />
-                  <Box
-                    sx={{
-                      flex: 1,
-                      maxWidth: 10,
-                      borderRadius: "6px 6px 0 0",
-                      bgcolor: "info.main",
-                      height: barPct(row.paidOut, max),
-                      transition: "height 200ms ease",
-                    }}
-                  />
-                  <Box
-                    sx={{
-                      flex: 1,
-                      maxWidth: 10,
-                      borderRadius: "6px 6px 0 0",
-                      bgcolor: row.profit >= 0 ? "success.main" : "error.main",
-                      height: barPct(row.profit, max),
-                      transition: "height 200ms ease",
-                    }}
-                  />
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: "center" }}>
-                  {row.label}
-                </Typography>
-              </Box>
-            ))}
+                  >
+                    <Box
+                      sx={{ display: "flex", alignItems: "flex-end", gap: 0.25, height: 1, justifyContent: "center" }}
+                      title={`${row.label}: received ${formatMoney(row.received)}, paid out ${formatMoney(row.paidOut)}, profit ${formatMoney(row.profit)}`}
+                    >
+                      <Box
+                        sx={{
+                          flex: 1,
+                          maxWidth: 10,
+                          borderRadius: "6px 6px 0 0",
+                          bgcolor: "primary.main",
+                          height: barPct(row.received, max),
+                          transition: "height 200ms ease",
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          flex: 1,
+                          maxWidth: 10,
+                          borderRadius: "6px 6px 0 0",
+                          bgcolor: "info.main",
+                          height: barPct(row.paidOut, max),
+                          transition: "height 200ms ease",
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          flex: 1,
+                          maxWidth: 10,
+                          borderRadius: "6px 6px 0 0",
+                          bgcolor: row.profit >= 0 ? "success.main" : "error.main",
+                          height: barPct(row.profit, max),
+                          transition: "height 200ms ease",
+                        }}
+                      />
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      color={isSelected ? "text.primary" : "text.secondary"}
+                      sx={{ mt: 1, textAlign: "center", fontWeight: isSelected ? 700 : 400 }}
+                    >
+                      {row.label}
+                    </Typography>
+                  </Box>
+                </Link>
+              );
+            })}
           </Box>
         </>
       )}
@@ -155,7 +172,7 @@ export function MonthCashCard({
                 </Link>
               </Typography>
               <Typography className="fr-money" variant="body2" sx={{ fontWeight: 600 }}>
-                {formatMoney(unbilledAmount)}
+                {formatMoneyWhole(unbilledAmount)}
               </Typography>
             </Stack>
           ) : null}
@@ -183,7 +200,7 @@ function BreakdownRow({ label, value, emphasize }: { label: string; value: numbe
         {label}
       </Typography>
       <Typography className="fr-money" variant="body2" sx={{ fontWeight: emphasize ? 700 : 600 }}>
-        {formatMoney(value)}
+        {formatMoneyWhole(value)}
       </Typography>
     </Stack>
   );

@@ -32,3 +32,11 @@ export function computeMonthlyOverview(totals: MonthlyTotals): MonthlyOverview {
     cashGap,
   };
 }
+
+/**
+ * Expected balance: profit so far plus money still to collect minus money still to pay
+ * (open payables and unpaid expenses). Worked out from recorded data only, never the bank balance.
+ */
+export function expectedBalance(input: { profit: number; toCollect: number; toPay: number }): number {
+  return input.profit + input.toCollect - input.toPay;
+}

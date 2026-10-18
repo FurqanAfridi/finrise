@@ -7,6 +7,15 @@ export function monthBounds(year: number, month: number, fiscalMonthStartDay = 1
   return { start, end };
 }
 
+/** Year and month from URL segments, or null when they are not a real month. */
+export function parseYearMonth(yearRaw: string, monthRaw: string): { year: number; month: number } | null {
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  if (!Number.isInteger(year) || year < 1990 || year > 2100) return null;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return null;
+  return { year, month };
+}
+
 export function previousMonth(year: number, month: number): { year: number; month: number } {
   if (month <= 1) return { year: year - 1, month: 12 };
   return { year, month: month - 1 };

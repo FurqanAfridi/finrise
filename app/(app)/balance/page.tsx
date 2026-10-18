@@ -9,26 +9,29 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
-import { saveCashOpeningBalance } from "@/app/actions/ops";
+import { AvailableBalanceCard } from "@/components/balance/available-balance-card";
 import { MainCard } from "@/components/berry/main-card";
 import { NativeSelect, TextInput } from "@/components/forms";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { KpiCard } from "@/components/shared/kpi-card";
-import { displayDate, isoDate } from "@/lib/dates";
+import { displayDate } from "@/lib/dates";
 import {
   buildCashLedger,
   CASH_LEDGER_KIND_LABEL,
   parseCashLedgerParams,
   type CashLedgerKind,
 } from "@/lib/finance/cash-ledger";
-import { getCashOpening, loadCashLedgerEntries } from "@/lib/finance/queries";
+import { computeMonthlyOverview, expectedBalance } from "@/lib/finance/monthlyOverview";
+import {
+  getAvailableBalance,
+  loadAllTimeTotals,
+  loadCashLedgerEntries,
+  loadOpenBalances,
+} from "@/lib/finance/queries";
 import { formatMoney } from "@/lib/money";
-import { prisma } from "@/lib/prisma";
-import { OPEN_BUYER_STATUSES, OPEN_PUBLISHER_STATUSES } from "@/lib/status";
-import { isTenantAdmin, requireBrokerOps } from "@/lib/tenant";
-import { num } from "@/lib/utils";
+import { canWrite, requireBrokerOps } from "@/lib/tenant";
 import { gridSpacing } from "@/theme/berry";
 
 const NUMBER_CELL = { whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" } as const;
@@ -47,41 +50,28 @@ export default async function BalancePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const ctx = await requireBrokerOps();
-  const admin = isTenantAdmin(ctx.tenantRole, ctx.platformRole);
   const params = await searchParams;
   const filters = parseCashLedgerParams(params);
 
-  const [entries, { opening, openingDate }, openBuyers, openPublishers, pendingPayouts] = await Promise.all([
+  const [entries, open, allTime, bank] = await Promise.all([
     loadCashLedgerEntries(ctx.tenantId),
-    getCashOpening(ctx.tenantId),
-    prisma.buyerInvoice.aggregate({
-      where: { tenantId: ctx.tenantId, isDraft: false, paymentStatus: { in: OPEN_BUYER_STATUSES } },
-      _sum: { receivable: true, received: true },
-    }),
-    prisma.publisherInvoice.aggregate({
-      where: { tenantId: ctx.tenantId, isDraft: false, paymentStatus: { in: OPEN_PUBLISHER_STATUSES } },
-      _sum: { payable: true, paid: true },
-    }),
-    prisma.publisherInvoice.aggregate({
-      where: { tenantId: ctx.tenantId, paidApprovalStatus: "PENDING" },
-      _sum: { paid: true },
-      _count: true,
-    }),
+    loadOpenBalances(ctx.tenantId),
+    loadAllTimeTotals(ctx.tenantId),
+    getAvailableBalance(ctx.tenantId),
   ]);
 
   const ledger = buildCashLedger(entries, {
-    opening,
-    openingDate,
     from: filters.from,
     to: filters.to,
     kinds: filters.kind ? [filters.kind] : undefined,
   });
 
-  const available = ledger.availableBalance.toNumber();
-  const toCollect = Math.max(num(openBuyers._sum.receivable) - num(openBuyers._sum.received), 0);
-  const toPay = Math.max(num(openPublishers._sum.payable) - num(openPublishers._sum.paid), 0);
-  const awaitingApproval = num(pendingPayouts._sum.paid);
-  const expected = available + toCollect - toPay - awaitingApproval;
+  const recorded = ledger.availableBalance.toNumber();
+  const entered = bank.amount?.toNumber() ?? null;
+  const toCollect = open.toCollect.toNumber();
+  const toPay = open.toPay.add(open.expensesToPay).toNumber();
+  const profit = computeMonthlyOverview(allTime).profit.toNumber();
+  const expected = expectedBalance({ profit, toCollect, toPay });
 
   const query: Record<string, string> = {};
   if (filters.fromValue) query.from = filters.fromValue;
@@ -94,7 +84,7 @@ export default async function BalancePage({
   ].filter(Boolean) as { key: string; label: string }[];
   const csvHref = `/balance/csv${Object.keys(query).length ? `?${new URLSearchParams(query)}` : ""}`;
   const ranged = Boolean(filters.from || filters.to || filters.kind);
-  const showBroughtForward = Boolean(filters.from) || !ledger.broughtForward.eq(0);
+  const showBroughtForward = Boolean(filters.from);
 
   return (
     <Box>
@@ -109,14 +99,15 @@ export default async function BalancePage({
 
       <Grid container spacing={gridSpacing} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <KpiCard
-            label="Available balance"
-            value={formatMoney(available)}
-            subtitle={
-              opening.eq(0)
-                ? "Money received minus money paid out, to date."
-                : `Includes an opening balance of ${formatMoney(opening.toNumber())}${openingDate ? ` on ${displayDate(openingDate)}` : ""}.`
+          <AvailableBalanceCard
+            amount={entered}
+            updatedLabel={
+              bank.updatedAt
+                ? `Updated ${displayDate(bank.updatedAt)}${bank.updatedBy ? ` by ${bank.updatedBy}` : ""}`
+                : null
             }
+            recorded={recorded}
+            canEdit={canWrite(ctx.tenantRole, ctx.platformRole)}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -137,9 +128,7 @@ export default async function BalancePage({
           <KpiCard
             label="Expected balance"
             value={formatMoney(expected)}
-            subtitle={`After ${formatMoney(toCollect)} still to collect, ${formatMoney(toPay)} still to pay${
-              awaitingApproval ? `, and ${formatMoney(awaitingApproval)} awaiting approval` : ""
-            }.`}
+            subtitle={`Profit ${formatMoney(profit)} + ${formatMoney(toCollect)} still to collect − ${formatMoney(toPay)} still to pay.`}
           />
         </Grid>
       </Grid>
@@ -179,10 +168,10 @@ export default async function BalancePage({
               <TableBody>
                 {showBroughtForward ? (
                   <TableRow>
-                    <TableCell sx={NUMBER_CELL}>{filters.from ? displayDate(filters.from) : displayDate(openingDate)}</TableCell>
+                    <TableCell sx={NUMBER_CELL}>{displayDate(filters.from)}</TableCell>
                     <TableCell colSpan={4}>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {filters.from ? "Brought forward" : "Opening balance"}
+                        Brought forward
                       </Typography>
                     </TableCell>
                     <TableCell align="right" sx={NUMBER_CELL}>
@@ -237,31 +226,6 @@ export default async function BalancePage({
         )}
       </MainCard>
 
-      {admin ? (
-        <MainCard title="Opening balance" contentSX={{ display: "grid", gap: 2 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-            Cash already in the bank before you started tracking in Fundlookup. Anything dated before the start date is
-            treated as already included, so it is not counted twice.
-          </Typography>
-          <Box
-            component="form"
-            action={saveCashOpeningBalance}
-            sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr auto" }, alignItems: "end" }}
-          >
-            <TextInput
-              label="Opening balance"
-              name="openingBalance"
-              kind="decimal"
-              maxDecimals={2}
-              defaultValue={opening.eq(0) ? "" : opening.toFixed(2)}
-            />
-            <TextInput label="Start date" name="openingDate" type="date" defaultValue={isoDate(openingDate)} />
-            <Button type="submit" variant="contained" color="secondary" sx={{ height: 40 }}>
-              Save
-            </Button>
-          </Box>
-        </MainCard>
-      ) : null}
     </Box>
   );
 }

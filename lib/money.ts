@@ -12,6 +12,16 @@ export function formatMoney(value: number, currency = "USD") {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+/** Whole dollars ($56,628) for summary cards where cents add noise. */
+export function formatMoneyWhole(value: number, currency = "USD") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
 /** @deprecated Prefer formatMoney — kept for existing call sites. */
 export function money(value: number, currency = "USD") {
   return formatMoney(value, currency);

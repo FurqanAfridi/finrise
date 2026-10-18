@@ -27,7 +27,7 @@ export type CashLedgerRow = CashLedgerEntry & {
 };
 
 export type CashLedger = {
-  /** Opening balance plus everything before `from` — the first row's starting point. */
+  /** Everything before `from`: the first row's starting point. */
   broughtForward: Decimal;
   rows: CashLedgerRow[];
   totalIn: Decimal;
@@ -47,30 +47,24 @@ const KIND_ORDER: Record<CashLedgerKind, number> = {
 
 /**
  * Builds a running-balance sheet, oldest first. `from` is inclusive and `to` is exclusive.
- * Entries dated before `openingDate` are treated as already counted in `opening`.
  */
 export function buildCashLedger(
   entries: CashLedgerEntry[],
   options: {
-    opening?: Decimal;
-    openingDate?: Date | null;
     from?: Date | null;
     to?: Date | null;
     kinds?: CashLedgerKind[];
   } = {},
 ): CashLedger {
-  const opening = cents(options.opening ?? 0);
-  const counted = entries
-    .filter((entry) => !options.openingDate || entry.date >= options.openingDate)
-    .sort(
+  const counted = [...entries].sort(
       (a, b) =>
         a.date.getTime() - b.date.getTime() ||
         KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
         a.id.localeCompare(b.id),
     );
 
-  let balance = opening;
-  let broughtForward = opening;
+  let balance = money(0);
+  let broughtForward = money(0);
   let totalIn = money(0);
   let totalOut = money(0);
   const rows: CashLedgerRow[] = [];
@@ -94,7 +88,7 @@ export function buildCashLedger(
     rows.push({ ...entry, amount, moneyIn, moneyOut, balance: cents(balance) });
   }
 
-  const availableBalance = counted.reduce((sum, entry) => sum.add(cents(entry.amount)), opening);
+  const availableBalance = counted.reduce((sum, entry) => sum.add(cents(entry.amount)), money(0));
 
   return {
     broughtForward: cents(broughtForward),

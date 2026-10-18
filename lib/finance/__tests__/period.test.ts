@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listPeriodFilter, monthPeriodFilter, periodChipLabel, periodFilter, yearSpan } from "../period";
+import { listPeriodFilter, monthPeriodFilter, parseYearMonth, periodChipLabel, periodFilter, yearSpan } from "../period";
 
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
 
@@ -39,5 +39,14 @@ describe("periodChipLabel", () => {
     expect(periodChipLabel(2026, undefined)).toBe("Year: 2026");
     expect(periodChipLabel(undefined, 1)).toBe("Month: January (all years)");
     expect(periodChipLabel(undefined, undefined)).toBeNull();
+  });
+});
+
+describe("parseYearMonth", () => {
+  it("accepts a real month and rejects anything else", () => {
+    expect(parseYearMonth("2026", "9")).toEqual({ year: 2026, month: 9 });
+    expect(parseYearMonth("2026", "13")).toBeNull();
+    expect(parseYearMonth("abc", "1")).toBeNull();
+    expect(parseYearMonth("2026", "1.5")).toBeNull();
   });
 });

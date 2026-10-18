@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cents, money } from "../decimal";
 import { lineTotal, settledAmount } from "../invoice";
-import { computeMonthlyOverview } from "../monthlyOverview";
+import { computeMonthlyOverview, expectedBalance } from "../monthlyOverview";
 import { partnerLedger } from "../partnerLedger";
 import { distributeProfit } from "../profitDistribution";
 import { invoiceVariance } from "../variance";
@@ -127,5 +127,11 @@ describe("settledAmount", () => {
   it("keeps an amount someone typed, including a part payment", () => {
     expect(settledAmount(500, 912)).toBe(500);
     expect(settledAmount(950, 912)).toBe(950);
+  });
+});
+
+describe("expectedBalance", () => {
+  it("adds what is still to collect and takes off what is still to pay", () => {
+    expect(expectedBalance({ profit: 136191, toCollect: 81648, toPay: 34840 })).toBe(182999);
   });
 });

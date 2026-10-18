@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { ThemeRegistry } from "@/components/theme-registry";
 import { APP_NAME, APP_PURPOSE, MARKETING_HOST } from "@/lib/brand";
 import "./globals.css";
@@ -44,7 +45,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" data-color-mode="light" className={inter.variable} suppressHydrationWarning>
       <body className={inter.className}>
-        <script
+        <Script
+          id="color-mode"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `try{var m=localStorage.getItem('fundlookup-color-mode')||localStorage.getItem('finrise-color-mode');if(m!=='light'&&m!=='dark'){m='light'}document.documentElement.dataset.colorMode=m;document.documentElement.style.colorScheme=m}catch(e){document.documentElement.dataset.colorMode='light';document.documentElement.style.colorScheme='light'}`,
           }}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isoDate } from "@/lib/dates";
 import { buildCashLedger, CASH_LEDGER_KIND_LABEL, parseCashLedgerParams } from "@/lib/finance/cash-ledger";
-import { getCashOpening, loadCashLedgerEntries } from "@/lib/finance/queries";
+import { loadCashLedgerEntries } from "@/lib/finance/queries";
 import { requireBrokerOps } from "@/lib/tenant";
 
 /** Quote a cell; text that Excel would read as a formula gets a leading apostrophe. */
@@ -13,23 +13,18 @@ function csvCell(value: string) {
 export async function GET(request: Request) {
   const ctx = await requireBrokerOps();
   const filters = parseCashLedgerParams(Object.fromEntries(new URL(request.url).searchParams));
-  const [entries, { opening, openingDate }] = await Promise.all([
-    loadCashLedgerEntries(ctx.tenantId),
-    getCashOpening(ctx.tenantId),
-  ]);
+  const entries = await loadCashLedgerEntries(ctx.tenantId);
   const ledger = buildCashLedger(entries, {
-    opening,
-    openingDate,
     from: filters.from,
     to: filters.to,
     kinds: filters.kind ? [filters.kind] : undefined,
   });
 
   const rows: string[][] = [["Date", "Type", "Description", "Reference", "Money in", "Money out", "Balance"]];
-  if (filters.from || !ledger.broughtForward.eq(0)) {
+  if (filters.from) {
     rows.push([
-      isoDate(filters.from ?? openingDate),
-      filters.from ? "Brought forward" : "Opening balance",
+      isoDate(filters.from),
+      "Brought forward",
       "",
       "",
       "",

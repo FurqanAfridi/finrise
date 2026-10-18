@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
+import { parseYearMonth } from "@/lib/finance/period";
 import { computeTenantMonth, loadMonthlyLines } from "@/lib/finance/queries";
-import { requireTenant } from "@/lib/tenant";
+import { requireBrokerOps } from "@/lib/tenant";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ year: string; month: string }> },
 ) {
-  const ctx = await requireTenant();
+  const ctx = await requireBrokerOps();
   const { year, month } = await params;
-  const y = Number(year);
-  const m = Number(month);
+  const parsed = parseYearMonth(year, month);
+  if (!parsed) return new NextResponse("Not found", { status: 404 });
+  const { year: y, month: m } = parsed;
   const [{ overview, distribution }, lines] = await Promise.all([
     computeTenantMonth(ctx.tenantId, y, m),
     loadMonthlyLines(ctx.tenantId, y, m),

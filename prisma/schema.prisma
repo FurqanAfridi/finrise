@@ -77,6 +77,17 @@ enum EmailSendStatus {
   FAILED
 }
 
+enum InvoiceActivityAction {
+  CREATED
+  EDITED
+  PAID
+  APPROVED
+  REJECTED
+  SENT
+  EMAILED
+  DELETED
+}
+
 enum FinanceMonthOverride {
   CLOSED
   OPEN
@@ -120,6 +131,7 @@ model Tenant {
   companyProfile       CompanyProfile?
   smtpMailboxes        SmtpMailbox[]
   emailLogs            InvoiceEmailLog[]
+  invoiceActivities    InvoiceActivity[]
 }
 
 model TenantMembership {
@@ -153,6 +165,9 @@ model User {
   memberships   TenantMembership[]
   notifications Notification[]
   paidApprovals PublisherInvoice[]  @relation("PaidApprovedBy")
+  createdBuyerInvoices     BuyerInvoice[]     @relation("BuyerInvoiceCreatedBy")
+  createdPublisherInvoices PublisherInvoice[] @relation("PublisherInvoiceCreatedBy")
+  invoiceActivities        InvoiceActivity[]
   emailsSent     InvoiceEmailLog[]
   passwordResets PasswordReset[]
 }
@@ -416,6 +431,9 @@ model BuyerInvoice {
   isDraft          Boolean       @default(false)
   origin           InvoiceOrigin @default(MANUAL)
   cycleKey         String?       @unique
+  /// Who entered the invoice. Null for automatic drafts and invoices created before this was tracked.
+  createdBy        User?         @relation("BuyerInvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById      String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   emailLogs        InvoiceEmailLog[]
@@ -466,6 +484,9 @@ model PublisherInvoice {
   isDraft            Boolean             @default(false)
   origin             InvoiceOrigin       @default(MANUAL)
   cycleKey           String?             @unique
+  /// Who entered the payable. Null for automatic drafts and payables created before this was tracked.
+  createdBy          User?               @relation("PublisherInvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById        String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   dailyFigures       PublisherDailyFigure[]
@@ -762,4 +783,27 @@ model MonthReconciliation {
   notes          String?
 
   @@unique([tenantId, year, month])
+}
+
+/// One thing a person did to an invoice or payable, shown to company admins on the Activity page.
+/// `invoiceId` is deliberately not a foreign key so the row survives when the bill is deleted.
+model InvoiceActivity {
+  id           String                @id @default(cuid())
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId     String
+  user         User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId       String?
+  /// "buyer" for invoices, "publisher" for payables.
+  kind         String
+  invoiceId    String
+  /// Snapshot such as "DEMOF-0020 · Demo Northstar Auto · 09/01 - 09/30", kept after deletion.
+  invoiceLabel String
+  action       InvoiceActivityAction
+  /// What changed, e.g. "Amount due $500.00 → $700.00".
+  details      String?
+  createdAt    DateTime              @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, userId])
+  @@index([invoiceId])
 }

@@ -1,7 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { addUtcDays, diffUtcDays, utcDay } from "@/lib/billing-cycle";
 import { cents } from "@/lib/finance/decimal";
-import { getFinanceSettings, overallProfit } from "@/lib/finance/queries";
+import { getFinanceSettings, loadAllTimeTotals, loadMonthlyTotals, loadOpenBalances } from "@/lib/finance/queries";
+import { computeMonthlyOverview } from "@/lib/finance/monthlyOverview";
+import { previousMonth } from "@/lib/finance/period";
 import { invoiceVariance } from "@/lib/finance/variance";
 import { formatMoney } from "@/lib/money";
 import { isoDate } from "@/lib/dates";
@@ -40,7 +42,18 @@ export async function getSetting(tenantId: string, key: string, fallback = "") {
   return row?.value ?? fallback;
 }
 
-export async function getDashboardStats(tenantId: string) {
+/** How many months the dashboard chart shows, ending at the selected month. */
+const TREND_MONTHS = 6;
+
+/** `selected` null means all months: the cards cover all history and the chart ends at the current month. */
+export async function getDashboardStats(tenantId: string, selected: { year: number; month: number } | null) {
+  const settings = await getFinanceSettings(tenantId);
+  const now = new Date();
+  const end = selected ?? { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 };
+  const trendKeys: { year: number; month: number }[] = [end];
+  while (trendKeys.length < TREND_MONTHS) trendKeys.unshift(previousMonth(trendKeys[0].year, trendKeys[0].month));
+
+  // Past due only counts sent bills; a draft cannot be late.
   const openBuyerWhere = {
     tenantId,
     isDraft: false,
@@ -53,9 +66,10 @@ export async function getDashboardStats(tenantId: string) {
   };
 
   const [
-    profit,
-    unpaidBuyers,
-    unpaidPublishers,
+    monthTotals,
+    allTimeTotals,
+    openNow,
+    openInPeriod,
     overdueBuyers,
     overduePublishers,
     pendingApprovals,
@@ -64,17 +78,14 @@ export async function getDashboardStats(tenantId: string) {
     draftBuyers,
     draftPublishers,
   ] = await Promise.all([
-    overallProfit(tenantId),
-    prisma.buyerInvoice.aggregate({
-      where: openBuyerWhere,
-      _sum: { receivable: true, received: true },
-      _count: true,
-    }),
-    prisma.publisherInvoice.aggregate({
-      where: openPublisherWhere,
-      _sum: { payable: true, paid: true },
-      _count: true,
-    }),
+    Promise.all(
+      trendKeys.map((key) => loadMonthlyTotals(tenantId, key.year, key.month, settings.fiscalMonthStartDay)),
+    ),
+    selected ? Promise.resolve(null) : loadAllTimeTotals(tenantId),
+    loadOpenBalances(tenantId),
+    selected
+      ? loadOpenBalances(tenantId, { ...selected, fiscalMonthStartDay: settings.fiscalMonthStartDay })
+      : null,
     prisma.buyerInvoice.aggregate({
       where: { ...openBuyerWhere, dueDate: { lt: new Date() } },
       _sum: { receivable: true, received: true },
@@ -102,26 +113,35 @@ export async function getDashboardStats(tenantId: string) {
     prisma.publisherInvoice.count({ where: { tenantId, isDraft: true } }),
   ]);
 
-  const latest = profit.series[0];
-  const ar = n(unpaidBuyers._sum.receivable) - n(unpaidBuyers._sum.received);
-  const ap = n(unpaidPublishers._sum.payable) - n(unpaidPublishers._sum.paid);
-  const trend = profit.series.slice(0, 12).reverse().map((row) => ({
-    label: `${monthName(row.month).slice(0, 3)} ${String(row.year).slice(2)}`,
-    year: row.year,
-    month: row.month,
-    received: row.overview.buyerReceived.toNumber(),
-    paidOut: row.overview.publisherPaid.toNumber() + row.overview.expensesPaid.toNumber(),
-    invoiced: row.overview.buyerInvoiced.toNumber(),
-    expenses: row.overview.expensesPaid.toNumber(),
-    publisherPaid: row.overview.publisherPaid.toNumber(),
-    profit: row.overview.profit.toNumber(),
-  }));
+  const trendOverviews = monthTotals.map((totals) => computeMonthlyOverview(totals));
+  const period = allTimeTotals
+    ? computeMonthlyOverview(allTimeTotals)
+    : trendOverviews[trendOverviews.length - 1];
+  const periodOpen = openInPeriod ?? openNow;
+  const trend = trendKeys.map((key, index) => {
+    const overview = trendOverviews[index];
+    return {
+      label: `${monthName(key.month).slice(0, 3)} ${String(key.year).slice(2)}`,
+      year: key.year,
+      month: key.month,
+      received: overview.buyerReceived.toNumber(),
+      paidOut: overview.publisherPaid.toNumber() + overview.expensesPaid.toNumber(),
+      invoiced: overview.buyerInvoiced.toNumber(),
+      expenses: overview.expensesPaid.toNumber(),
+      publisherPaid: overview.publisherPaid.toNumber(),
+      profit: overview.profit.toNumber(),
+    };
+  });
 
   return {
-    ar: Math.max(ar, 0),
-    ap: Math.max(ap, 0),
-    openBuyerCount: unpaidBuyers._count,
-    openPublisherCount: unpaidPublishers._count,
+    ar: openNow.toCollect.toNumber(),
+    /** Publishers still to pay plus booked expenses not yet paid. */
+    ap: openNow.toPay.add(openNow.expensesToPay).toNumber(),
+    openBuyerCount: openNow.toCollectCount,
+    openPublisherCount: openNow.toPayCount,
+    /** Open amounts for the selected month (or all months), used for the Expected balance card. */
+    periodToCollect: periodOpen.toCollect.toNumber(),
+    periodToPay: periodOpen.toPay.add(periodOpen.expensesToPay).toNumber(),
     overdueAr: Math.max(n(overdueBuyers._sum.receivable) - n(overdueBuyers._sum.received), 0),
     overdueCount: overdueBuyers._count,
     overdueAp: Math.max(n(overduePublishers._sum.payable) - n(overduePublishers._sum.paid), 0),
@@ -132,8 +152,7 @@ export async function getDashboardStats(tenantId: string) {
     unbilledPublisherAmount: n(unbilledPublishers._sum.amount),
     unbilledPublisherCount: unbilledPublishers._count,
     draftCount: draftBuyers + draftPublishers,
-    profit: profit.totalSavings.toNumber(),
-    latest,
+    period,
     trend,
   };
 }

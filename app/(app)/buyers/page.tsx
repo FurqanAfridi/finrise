@@ -11,6 +11,7 @@ import { Pagination } from "@/components/pagination";
 import { listBuyerEmailsByBuyerIds } from "@/lib/buyer-emails";
 import { invoiceVerticalLabel } from "@/lib/invoice-lines";
 import { formatMoney } from "@/lib/money";
+import { createdByLabel } from "@/lib/invoice-audit";
 import { listPeriodFilter, periodChipLabel, yearSpan } from "@/lib/finance/period";
 import { invoiceVariance, isOverdue } from "@/lib/finance/variance";
 import { getFinanceSettings } from "@/lib/finance/queries";
@@ -86,7 +87,7 @@ export default async function BuyersPage({
   const [rows, total, buyers, verticals, totals, mailboxes] = await Promise.all([
     prisma.buyerInvoice.findMany({
       where,
-      include: { buyer: true, vertical: true },
+      include: { buyer: true, vertical: true, createdBy: { select: { name: true, email: true } } },
       orderBy: [{ dueDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -191,6 +192,7 @@ export default async function BuyersPage({
       paymentStatus: row.paymentStatus,
       overdue: isOverdue(row.dueDate, OPEN_BUYER_STATUSES.includes(row.paymentStatus)),
       isDraft: row.isDraft,
+      createdLabel: admin ? createdByLabel(row) : null,
     };
   });
 

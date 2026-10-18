@@ -29,6 +29,7 @@ import { financeLockError } from "@/lib/finance/month-lock-context";
 import { invalid, type FormActionState } from "@/lib/form-state";
 import { NOTIFICATION, notifyReviewers } from "@/lib/notifications";
 import { formField, parseEmail } from "@/lib/validation";
+import { invoiceActivityLabel, logInvoiceActivity } from "@/lib/invoice-audit";
 
 export async function saveSmtpMailboxAction(
   _prev: FormActionState,
@@ -264,6 +265,15 @@ export async function sendInvoiceEmailAction(
     await prisma.buyerInvoice.updateMany({
       where: { id: invoice.id, tenantId: ctx.tenantId },
       data: { invoiceStatus: InvoiceStatus.SENT, isDraft: false },
+    });
+    await logInvoiceActivity({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      kind: "buyer",
+      invoiceId: invoice.id,
+      invoiceLabel: invoiceActivityLabel({ ...invoice, contactName: invoice.buyer.name }),
+      action: "EMAILED",
+      details: `To ${to}`,
     });
     await notifyReviewers({
       tenantId: ctx.tenantId,
