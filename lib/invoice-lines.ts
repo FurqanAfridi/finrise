@@ -27,7 +27,8 @@ export type InvoiceLineDisplay = {
   comments: string | null;
 };
 
-export function parseInvoiceLineRowsFromForm(formData: FormData) {
+/** `legacyTotalKey` is the single-line total field older forms post ("revenue" or "amount"). */
+export function parseInvoiceLineRowsFromForm(formData: FormData, legacyTotalKey: "revenue" | "amount" = "revenue") {
   const verticalIds = formData.getAll("lineVerticalId").map((value) => String(value).trim());
   const leadCounts = formData.getAll("lineLeadCount").map((value) => String(value).trim());
   const rateTypes = formData.getAll("lineRateType").map((value) => String(value).trim());
@@ -81,7 +82,7 @@ export function parseInvoiceLineRowsFromForm(formData: FormData) {
     if (!legacyLeadCount.ok) return { ok: false as const, error: legacyLeadCount.error };
     const legacyRate = parseMoney(formField(formData, "rate"), "Rate", false);
     if (!legacyRate.ok) return { ok: false as const, error: legacyRate.error };
-    const legacyAmount = parseMoney(formField(formData, "revenue"), "Amount", false);
+    const legacyAmount = parseMoney(formField(formData, legacyTotalKey), "Amount", false);
     if (!legacyAmount.ok) return { ok: false as const, error: legacyAmount.error };
     const legacyRateType = parseRateType(formField(formData, "rateType"));
     const computed = lineTotal(
@@ -142,6 +143,32 @@ export async function replaceBuyerInvoiceLines(
           id: cuidLike(),
           tenantId,
           buyerInvoiceId,
+          verticalId: line.verticalId,
+          leadCount: line.leadCount,
+          rateType: line.rateType,
+          rate: line.rate,
+          amount: line.amount,
+          comments: line.comments,
+          sortOrder: index,
+        },
+      }),
+    ),
+  ]);
+}
+
+export async function replacePublisherInvoiceLines(
+  tenantId: string,
+  publisherInvoiceId: string,
+  lines: ParsedInvoiceLine[],
+) {
+  await prisma.$transaction([
+    prisma.publisherInvoiceLine.deleteMany({ where: { tenantId, publisherInvoiceId } }),
+    ...lines.map((line, index) =>
+      prisma.publisherInvoiceLine.create({
+        data: {
+          id: cuidLike(),
+          tenantId,
+          publisherInvoiceId,
           verticalId: line.verticalId,
           leadCount: line.leadCount,
           rateType: line.rateType,

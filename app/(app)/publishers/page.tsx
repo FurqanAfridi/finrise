@@ -10,6 +10,7 @@ import { createdByLabel } from "@/lib/invoice-audit";
 import { listPeriodFilter, periodChipLabel, yearSpan } from "@/lib/finance/period";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { invoiceVariance } from "@/lib/finance/variance";
+import { invoiceVerticalLabel } from "@/lib/invoice-lines";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { PAYMENT_STATUS_LABEL } from "@/lib/status";
@@ -78,7 +79,7 @@ export default async function PublishersPage({
       week ? { weekLabel: { contains: week, mode: "insensitive" as const } } : {},
       status ? { paymentStatus: status } : {},
       publisherId ? { publisherId } : {},
-      verticalId ? { verticalId } : {},
+      verticalId ? { OR: [{ verticalId }, { lines: { some: { verticalId } } }] } : {},
     ],
   };
 
@@ -105,6 +106,19 @@ export default async function PublishersPage({
       _sum: { payable: true, paid: true, amount: true },
     }),
   ]);
+
+  const invoiceIds = rows.map((row) => row.id);
+  const linesByInvoice = invoiceIds.length
+    ? await prisma.publisherInvoiceLine.findMany({
+        where: { tenantId: ctx.tenantId, publisherInvoiceId: { in: invoiceIds } },
+        include: { vertical: { select: { name: true } } },
+        orderBy: { sortOrder: "asc" },
+      })
+    : [];
+  const linesGrouped = linesByInvoice.reduce<Record<string, typeof linesByInvoice>>((acc, line) => {
+    (acc[line.publisherInvoiceId] ??= []).push(line);
+    return acc;
+  }, {});
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const paginationQuery: Record<string, string> = {};
@@ -138,7 +152,18 @@ export default async function PublishersPage({
       id: row.id,
       publisherName: row.publisher.name,
       isInternal: row.publisher.isInternal,
-      verticalName: row.vertical?.name ?? null,
+      verticalName: linesGrouped[row.id]
+        ? invoiceVerticalLabel(
+            linesGrouped[row.id].map((line) => ({
+              verticalName: line.vertical?.name ?? null,
+              leadCount: line.leadCount == null ? null : Number(line.leadCount),
+              rateType: line.rateType,
+              rate: line.rate == null ? null : Number(line.rate),
+              amount: Number(line.amount),
+              comments: line.comments,
+            })),
+          )
+        : row.vertical?.name ?? null,
       periodLabel: row.periodLabel || row.monthLabel,
       invoiceNumber: row.invoiceNumber,
       dueDate: row.dueDate ? row.dueDate.toISOString() : null,

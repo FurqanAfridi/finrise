@@ -16,6 +16,7 @@ import { parseBuyerEmailsFromForm, syncBuyerEmails } from "@/lib/buyer-emails";
 import {
   parseInvoiceLineRowsFromForm,
   replaceBuyerInvoiceLines,
+  replacePublisherInvoiceLines,
   summarizeInvoiceLines,
 } from "@/lib/invoice-lines";
 import { financeLockError } from "@/lib/finance/month-lock-context";
@@ -568,7 +569,10 @@ export async function upsertPublisherInvoice(
     return { error: "You can only edit your own invoices." };
   }
 
-  const verticalId = str(formData, "verticalId");
+  const lineRows = parseInvoiceLineRowsFromForm(formData, "amount");
+  if (!lineRows.ok) return { error: lineRows.error };
+  const summary = summarizeInvoiceLines(lineRows.value);
+  const verticalId = summary.verticalId;
   const verticalDefaults = await applyPublisherVerticalDefaults({
     tenantId: ctx.tenantId,
     publisherId,
@@ -577,13 +581,13 @@ export async function upsertPublisherInvoice(
     fallbackTerms: publisher.defaultTerms,
   });
 
-  const rateType = enumValue(str(formData, "rateType"), Object.values(RateType), verticalDefaults.rateType);
-  const leadCount = dec(formData, "leadCount");
-  let rate = dec(formData, "rate");
+  const rateType = summary.rateType;
+  const leadCount = summary.leadCount;
+  let rate = summary.rate;
   if ((rate == null || Number.isNaN(rate)) && verticalDefaults.rate != null) {
     rate = verticalDefaults.rate;
   }
-  const amountInput = dec(formData, "amount");
+  const amountInput = summary.revenue;
   const payableInput = dec(formData, "payable");
   const paidInput = ctx.tenantRole === "PUBLISHER" ? null : dec(formData, "paid");
   const transactionAmount = ctx.tenantRole === "PUBLISHER" ? null : dec(formData, "transactionAmount");
@@ -662,16 +666,42 @@ export async function upsertPublisherInvoice(
     paidApprovalStatus: markedPaid ? PaidApprovalStatus.PENDING : previous?.paidApprovalStatus,
   };
 
+  const verticalNames = async (ids: (string | null)[]) => {
+    const named = await prisma.vertical.findMany({
+      where: { tenantId: ctx.tenantId, id: { in: ids.filter((value): value is string => Boolean(value)) } },
+      select: { id: true, name: true },
+    });
+    return ids.map((value) => named.find((row) => row.id === value)?.name ?? "None").join(", ");
+  };
+  const verticalsBefore = previous
+    ? await verticalNames(
+        (
+          await prisma.publisherInvoiceLine.findMany({
+            where: { tenantId: ctx.tenantId, publisherInvoiceId: previous.id },
+            orderBy: { sortOrder: "asc" },
+            select: { verticalId: true },
+          })
+        ).map((line) => line.verticalId),
+      )
+    : "";
+
   const saved = id
     ? await prisma.publisherInvoice.update({ where: { id }, data })
     : await prisma.publisherInvoice.create({ data: { ...data, createdById: ctx.userId } });
+  await replacePublisherInvoiceLines(ctx.tenantId, saved.id, lineRows.value);
 
   const previousPublisherName =
     previous && previous.publisherId !== publisherId
       ? ((await prisma.publisher.findUnique({ where: { id: previous.publisherId }, select: { name: true } }))?.name ?? "")
       : publisher.name;
+  const verticalsAfter = await verticalNames(lineRows.value.map((line) => line.verticalId));
   const changes = previous
-    ? publisherChanges(previous, saved, { before: previousPublisherName, after: publisher.name })
+    ? [
+        describeChanges([{ label: "Verticals", before: verticalsBefore, after: verticalsAfter }]),
+        publisherChanges(previous, saved, { before: previousPublisherName, after: publisher.name }),
+      ]
+        .filter(Boolean)
+        .join("; ") || null
     : null;
   if (!previous || changes) {
     await logInvoiceActivity({

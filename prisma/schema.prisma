@@ -115,6 +115,7 @@ model Tenant {
   publisherDailyFigures PublisherDailyFigure[]
   buyerEmails          BuyerEmail[]
   buyerInvoiceLines    BuyerInvoiceLine[]
+  publisherInvoiceLines PublisherInvoiceLine[]
   expenses             Expense[]
   expenseCategories    ExpenseCategory[]
   recurringExpenses    RecurringExpense[]
@@ -264,6 +265,7 @@ model Vertical {
   buyerInvoices      BuyerInvoice[]
   buyerInvoiceLines  BuyerInvoiceLine[]
   publisherInvoices  PublisherInvoice[]
+  publisherInvoiceLines PublisherInvoiceLine[]
   buyerOffers        BuyerVertical[]
   publisherOffers    PublisherVertical[]
   buyerDailyFigures  BuyerDailyFigure[]
@@ -307,6 +309,26 @@ model BuyerInvoiceLine {
 
   @@index([tenantId])
   @@index([buyerInvoiceId])
+}
+
+/** Line items on a publisher payable — one row per vertical paid out. */
+model PublisherInvoiceLine {
+  id                 String           @id @default(cuid())
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId           String
+  publisherInvoice   PublisherInvoice @relation(fields: [publisherInvoiceId], references: [id], onDelete: Cascade)
+  publisherInvoiceId String
+  vertical           Vertical?        @relation(fields: [verticalId], references: [id])
+  verticalId         String?
+  leadCount          Decimal?         @db.Decimal(14, 2)
+  rateType           RateType         @default(CPL)
+  rate               Decimal?         @db.Decimal(14, 4)
+  amount             Decimal          @db.Decimal(14, 2)
+  comments           String?
+  sortOrder          Int              @default(0)
+
+  @@index([tenantId])
+  @@index([publisherInvoiceId])
 }
 
 /** A buyer can buy more than one vertical, each with its own rate and NET terms. */
@@ -490,6 +512,7 @@ model PublisherInvoice {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   dailyFigures       PublisherDailyFigure[]
+  lines              PublisherInvoiceLine[]
 
   @@index([tenantId])
   @@index([publisherId])

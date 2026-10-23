@@ -217,8 +217,8 @@ export function GenerateInvoiceForm({
               lines={lines}
               setLines={setLines}
               verticals={verticals}
-              buyerVerticalOffers={buyerVerticalOffers}
-              buyerId={buyerId}
+              verticalOffers={buyerVerticalOffers}
+              contactId={buyerId}
             />
           </Box>
         ) : null}

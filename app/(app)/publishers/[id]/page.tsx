@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
 import { getDirectoryOptions } from "@/lib/queries";
 import { withPlainNumbers } from "@/lib/serialize";
+import { listPublisherVerticalOffersByPublisher } from "@/lib/contact-verticals";
 import {
   assertPublisherInvoiceAccess,
   canWrite,
@@ -34,7 +35,17 @@ export default async function EditPublisherInvoicePage({
     redirect("/publishers");
   }
 
-  const options = await getDirectoryOptions(ctx.tenantId);
+  const [options, lines] = await Promise.all([
+    getDirectoryOptions(ctx.tenantId),
+    prisma.publisherInvoiceLine.findMany({
+      where: { tenantId: ctx.tenantId, publisherInvoiceId: invoice.id },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
+  const publisherVerticalOffers = await listPublisherVerticalOffersByPublisher(
+    ctx.tenantId,
+    options.publishers.map((publisher) => publisher.id),
+  );
   return (
     <div>
       <PageHeader
@@ -49,8 +60,10 @@ export default async function EditPublisherInvoicePage({
       </PageHeader>
       <PublisherInvoiceForm
         invoice={withPlainNumbers(invoice)}
+        lines={lines.map(withPlainNumbers)}
         publishers={options.publishers}
         verticals={options.verticals}
+        publisherVerticalOffers={publisherVerticalOffers}
         lockedPublisherId={portal ? ctx.linkedPublisherId ?? undefined : undefined}
         submitLabel={portal ? "Save invoice" : undefined}
       />

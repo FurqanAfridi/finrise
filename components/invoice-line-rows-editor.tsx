@@ -91,14 +91,16 @@ export function InvoiceLineRowsEditor({
   lines,
   setLines,
   verticals,
-  buyerVerticalOffers,
-  buyerId,
+  verticalOffers,
+  contactId,
 }: {
   lines: InvoiceLineDraft[];
   setLines: React.Dispatch<React.SetStateAction<InvoiceLineDraft[]>>;
   verticals: { id: string; name: string }[];
-  buyerVerticalOffers: Record<string, ContactVerticalOffer[]>;
-  buyerId: string;
+  /** Saved vertical rates per buyer or publisher, keyed by contact id. */
+  verticalOffers: Record<string, ContactVerticalOffer[]>;
+  /** The selected buyer or publisher. */
+  contactId: string;
 }) {
   const total = useMemo(
     () =>
@@ -118,7 +120,7 @@ export function InvoiceLineRowsEditor({
   );
 
   function applyVerticalDefaults(key: string, verticalId: string) {
-    const offer = buyerVerticalOffers[buyerId]?.find((row) => row.verticalId === verticalId);
+    const offer = verticalOffers[contactId]?.find((row) => row.verticalId === verticalId);
     if (!offer) return;
     setLines((current) =>
       current.map((line) =>
