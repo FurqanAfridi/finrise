@@ -10,22 +10,15 @@ import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { listBuyerEmailsByBuyerIds } from "@/lib/buyer-emails";
 import { invoiceVerticalLabel } from "@/lib/invoice-lines";
+import { buyerInvoiceListFilter, exportQuery } from "@/lib/invoice-list-filters";
 import { formatMoney } from "@/lib/money";
 import { createdByLabel } from "@/lib/invoice-audit";
-import { listPeriodFilter, periodChipLabel, yearSpan } from "@/lib/finance/period";
 import { invoiceVariance, isOverdue } from "@/lib/finance/variance";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { prisma } from "@/lib/prisma";
 import { OPEN_BUYER_STATUSES, PAYMENT_STATUS_LABEL } from "@/lib/status";
 import { listSmtpMailboxes } from "@/lib/smtp";
-import {
-  canWrite,
-  isBuyerPortal,
-  isPublisherPortal,
-  isTenantAdmin,
-  requireTenant,
-  scopedBuyerFilter,
-} from "@/lib/tenant";
+import { canWrite, isPublisherPortal, isTenantAdmin, requireTenant } from "@/lib/tenant";
 import { num } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -41,48 +34,13 @@ export default async function BuyersPage({
   const settings = await getFinanceSettings(ctx.tenantId);
   const params = await searchParams;
   const page = Math.max(1, Number(params.page ?? 1));
-  const q = params.q?.trim() ?? "";
-  const status = params.status as PaymentStatus | undefined;
-  const portal = isBuyerPortal(ctx);
-  const buyerId = scopedBuyerFilter(ctx, params.buyer);
-  const verticalId = portal ? undefined : params.vertical;
-  const year = params.year ? Number(params.year) : undefined;
-  const month = params.month ? Number(params.month) : undefined;
+  const { where, q, status, portal, verticalId, year, month, periodChip } = await buyerInvoiceListFilter(
+    ctx,
+    params,
+    settings.fiscalMonthStartDay,
+  );
   const writer = canWrite(ctx.tenantRole, ctx.platformRole);
   const admin = isTenantAdmin(ctx.tenantRole, ctx.platformRole);
-
-  const dateRange =
-    month && !year
-      ? await prisma.buyerInvoice.aggregate({
-          where: { tenantId: ctx.tenantId },
-          _min: { periodStart: true, dueDate: true },
-          _max: { periodStart: true, dueDate: true },
-        })
-      : null;
-  const dataYears = dateRange
-    ? yearSpan(dateRange._min.periodStart, dateRange._min.dueDate, dateRange._max.periodStart, dateRange._max.dueDate)
-    : [];
-  const dateFilter = listPeriodFilter(year, month, dataYears, settings.fiscalMonthStartDay);
-  const periodChip = periodChipLabel(year, month);
-
-  const where = {
-    tenantId: ctx.tenantId,
-    AND: [
-      dateFilter,
-      q
-        ? {
-            OR: [
-              { invoiceNumber: { contains: q, mode: "insensitive" as const } },
-              { periodLabel: { contains: q, mode: "insensitive" as const } },
-              { buyer: { name: { contains: q, mode: "insensitive" as const } } },
-            ],
-          }
-        : {},
-      status ? { paymentStatus: status } : {},
-      buyerId ? { buyerId } : {},
-      verticalId ? { OR: [{ verticalId }, { lines: { some: { verticalId } } }] } : {},
-    ],
-  };
 
   const [rows, total, buyers, verticals, totals, mailboxes] = await Promise.all([
     prisma.buyerInvoice.findMany({
@@ -208,6 +166,9 @@ export default async function BuyersPage({
         actionHref={writer ? "/buyers/generate" : undefined}
         actionLabel={writer ? "Create invoice" : undefined}
       >
+        <Button component="a" href={`/buyers/export${exportQuery(params)}`} variant="outlined" color="primary">
+          Export to Excel
+        </Button>
         {writer ? (
           <Link href="/buyers/new">
             <Button variant="outlined" color="primary">

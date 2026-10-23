@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import { PaidApprovalStatus, PaymentStatus } from "@prisma/client";
 import { FilterBar } from "@/components/shared/filter-bar";
 import { PublisherInvoicesView } from "@/components/shared/publisher-invoices-view";
@@ -7,22 +8,14 @@ import { MonthSelect, NativeSelect, TextInput, YearSelect } from "@/components/f
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { createdByLabel } from "@/lib/invoice-audit";
-import { listPeriodFilter, periodChipLabel, yearSpan } from "@/lib/finance/period";
 import { getFinanceSettings } from "@/lib/finance/queries";
 import { invoiceVariance } from "@/lib/finance/variance";
 import { invoiceVerticalLabel } from "@/lib/invoice-lines";
+import { exportQuery, publisherInvoiceListFilter } from "@/lib/invoice-list-filters";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { PAYMENT_STATUS_LABEL } from "@/lib/status";
-import {
-  canApprovePayments,
-  canWrite,
-  isBuyerPortal,
-  isPublisherPortal,
-  isTenantAdmin,
-  requireTenant,
-  scopedPublisherFilter,
-} from "@/lib/tenant";
+import { canApprovePayments, canWrite, isBuyerPortal, isTenantAdmin, requireTenant } from "@/lib/tenant";
 import { num } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -38,50 +31,14 @@ export default async function PublishersPage({
   const settings = await getFinanceSettings(ctx.tenantId);
   const params = await searchParams;
   const page = Math.max(1, Number(params.page ?? 1));
-  const q = params.q?.trim() ?? "";
-  const status = params.status as PaymentStatus | undefined;
-  const portal = isPublisherPortal(ctx);
-  const publisherId = scopedPublisherFilter(ctx, params.publisher);
-  const verticalId = portal ? undefined : params.vertical;
-  const year = params.year ? Number(params.year) : undefined;
-  const month = params.month ? Number(params.month) : undefined;
-  const week = portal ? "" : (params.week?.trim() ?? "");
-  const dateRange =
-    month && !year
-      ? await prisma.publisherInvoice.aggregate({
-          where: { tenantId: ctx.tenantId },
-          _min: { periodStart: true, dueDate: true },
-          _max: { periodStart: true, dueDate: true },
-        })
-      : null;
-  const dataYears = dateRange
-    ? yearSpan(dateRange._min.periodStart, dateRange._min.dueDate, dateRange._max.periodStart, dateRange._max.dueDate)
-    : [];
-  const dateFilter = listPeriodFilter(year, month, dataYears, settings.fiscalMonthStartDay);
-  const periodChip = periodChipLabel(year, month);
+  const { where, q, status, portal, verticalId, year, month, week, periodChip } = await publisherInvoiceListFilter(
+    ctx,
+    params,
+    settings.fiscalMonthStartDay,
+  );
   const approver = canApprovePayments(ctx.tenantRole, ctx.platformRole);
   const writer = canWrite(ctx.tenantRole, ctx.platformRole);
   const admin = isTenantAdmin(ctx.tenantRole, ctx.platformRole);
-
-  const where = {
-    tenantId: ctx.tenantId,
-    AND: [
-      dateFilter,
-      q
-        ? {
-            OR: [
-              { invoiceNumber: { contains: q, mode: "insensitive" as const } },
-              { periodLabel: { contains: q, mode: "insensitive" as const } },
-              { publisher: { name: { contains: q, mode: "insensitive" as const } } },
-            ],
-          }
-        : {},
-      week ? { weekLabel: { contains: week, mode: "insensitive" as const } } : {},
-      status ? { paymentStatus: status } : {},
-      publisherId ? { publisherId } : {},
-      verticalId ? { OR: [{ verticalId }, { lines: { some: { verticalId } } }] } : {},
-    ],
-  };
 
   const [rows, total, publishers, verticals, totals] = await Promise.all([
     prisma.publisherInvoice.findMany({
@@ -189,7 +146,11 @@ export default async function PublishersPage({
         }
         actionHref={writer || portal ? "/publishers/new" : undefined}
         actionLabel={portal ? "Create invoice" : writer ? "New payable" : undefined}
-      />
+      >
+        <Button component="a" href={`/publishers/export${exportQuery(params)}`} variant="outlined" color="primary">
+          Export to Excel
+        </Button>
+      </PageHeader>
 
       <FilterBar basePath="/publishers" query={paginationQuery} chips={chips}>
         <TextInput label="Search" name="q" defaultValue={q} />

@@ -59,6 +59,9 @@ export default async function MonthlyOverviewPage({
             All reports
           </Button>
         </Link>
+        <Button component="a" href={`/reports/monthly/${year}/${month}/export`} variant="outlined" color="primary">
+          Export to Excel
+        </Button>
         <Link href={`/reports/monthly/${year}/${month}/csv`}>
           <Button variant="outlined" color="primary">
             Download CSV

@@ -69,6 +69,9 @@ export default async function PeriodReportPage({
             </Button>
           </Link>
         ) : null}
+        <Button component="a" href={`/reports/${grain}/${year}/${part}/export`} variant="outlined" color="primary">
+          Export to Excel
+        </Button>
       </PageHeader>
 
       <MainCard sx={{ mb: 3 }} contentSX={{ py: 2 }}>
