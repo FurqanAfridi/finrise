@@ -1,4 +1,4 @@
-import Link from "next/link";
+// import Link from "next/link"; // re-enable with the hidden "Ledger entry" button
 import { redirect } from "next/navigation";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -169,13 +169,14 @@ export default async function BuyersPage({
         <Button component="a" href={`/buyers/export${exportQuery(params)}`} variant="outlined" color="primary">
           Export to Excel
         </Button>
+        {/* Hidden for now: "Ledger entry" records an existing / past invoice via /buyers/new.
         {writer ? (
           <Link href="/buyers/new">
             <Button variant="outlined" color="primary">
               Ledger entry
             </Button>
           </Link>
-        ) : null}
+        ) : null} */}
       </PageHeader>
 
       <FilterBar basePath="/buyers" query={paginationQuery} chips={chips}>
